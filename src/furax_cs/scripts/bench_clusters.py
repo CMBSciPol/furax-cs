@@ -66,13 +66,28 @@ def run_fg_buster(
     max_centroids = cluster_count
 
     temp_dust_patch_indices = find_kmeans_clusters(
-        mask, indices, cluster_count, jax.random.PRNGKey(0), max_centroids=max_centroids
+        mask,
+        indices,
+        cluster_count,
+        jax.random.PRNGKey(0),
+        max_centroids=max_centroids,
+        initial_sample_size=1,
     )
     beta_dust_patch_indices = find_kmeans_clusters(
-        mask, indices, cluster_count, jax.random.PRNGKey(1), max_centroids=max_centroids
+        mask,
+        indices,
+        cluster_count,
+        jax.random.PRNGKey(1),
+        max_centroids=max_centroids,
+        initial_sample_size=1,
     )
     beta_pl_patch_indices = find_kmeans_clusters(
-        mask, indices, cluster_count, jax.random.PRNGKey(2), max_centroids=max_centroids
+        mask,
+        indices,
+        cluster_count,
+        jax.random.PRNGKey(2),
+        max_centroids=max_centroids,
+        initial_sample_size=1,
     )
     patch_ids_fg = [
         temp_dust_patch_indices.astype(jnp.int64),
@@ -140,13 +155,28 @@ def run_jax_minimize(
     max_centroids = cluster_count
 
     temp_dust_patch_indices = find_kmeans_clusters(
-        mask, indices, cluster_count, jax.random.PRNGKey(0), max_centroids=max_centroids
+        mask,
+        indices,
+        cluster_count,
+        jax.random.PRNGKey(0),
+        max_centroids=max_centroids,
+        initial_sample_size=1,
     )
     beta_dust_patch_indices = find_kmeans_clusters(
-        mask, indices, cluster_count, jax.random.PRNGKey(1), max_centroids=max_centroids
+        mask,
+        indices,
+        cluster_count,
+        jax.random.PRNGKey(1),
+        max_centroids=max_centroids,
+        initial_sample_size=1,
     )
     beta_pl_patch_indices = find_kmeans_clusters(
-        mask, indices, cluster_count, jax.random.PRNGKey(2), max_centroids=max_centroids
+        mask,
+        indices,
+        cluster_count,
+        jax.random.PRNGKey(2),
+        max_centroids=max_centroids,
+        initial_sample_size=1,
     )
 
     patch_indices = {
@@ -252,7 +282,7 @@ def parse_args() -> argparse.Namespace:
         "--jax-solver",
         type=str,
         default="SKIP",
-        help="JAX solver name (e.g., optax_lbfgs_zoom, optimistix_bfgs, scipy_tnc)",
+        help="JAX solver name (e.g., optax_lbfgs, optimistix_bfgs, scipy_tnc)",
     )
     parser.add_argument(
         "--fgbuster-solver",

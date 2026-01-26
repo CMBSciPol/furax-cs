@@ -17,7 +17,7 @@ def compute_w(
     d: Stokes,
     patches: dict[str, Int[Array, " n_valid"]],
     max_iter: int = 100,
-    solver_name: str = "optax_lbfgs_zoom",
+    solver_name: str = "optax_lbfgs",
 ) -> Stokes:
     """Compute the foreground-only CMB reconstruction (W·d_fg).
 
@@ -34,7 +34,7 @@ def compute_w(
     max_iter : int, optional
         Maximum optimization iterations (default: 100).
     solver_name : str, optional
-        Solver name for optimization (default: "optax_lbfgs_zoom").
+        Solver name for optimization (default: "optax_lbfgs").
 
     Returns
     -------
@@ -92,7 +92,6 @@ def compute_w(
     )
 
     def W_op(p):
-        N = HomothetyOperator(1.0, _in_structure=d.structure)
         return sky_signal(
             p,
             nu,

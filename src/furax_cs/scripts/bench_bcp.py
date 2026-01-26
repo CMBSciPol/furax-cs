@@ -319,8 +319,8 @@ def parse_args():
     parser.add_argument(
         "--jax-solver",
         type=str,
-        default="optax_lbfgs_zoom",
-        help="JAX solver name (e.g., optax_lbfgs_zoom, optimistix_bfgs, scipy_tnc)",
+        default="optax_lbfgs",
+        help="JAX solver name (e.g., optax_lbfgs, optimistix_bfgs, scipy_tnc)",
     )
     parser.add_argument(
         "--fgbuster-solver",

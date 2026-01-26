@@ -7,7 +7,7 @@ from typing import Any, Union
 import healpy as hp
 import jax.numpy as jnp
 import numpy as np
-from furax._instruments.sky import FGBusterInstrument
+from furax._instruments.sky import FGBusterInstrument, get_sky
 from furax.obs.stokes import Stokes
 from jax_healpy.clustering import combine_masks
 from jaxtyping import Array
@@ -76,6 +76,8 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
     plot_patches = getattr(args, "plot_patches", False)
     plot_validation_curves = getattr(args, "plot_validation_curves", False)
     plot_all_metrics = getattr(args, "plot_all_metrics", False)
+    plot_all_params_residuals = getattr(args, "plot_all_params_residuals", False)
+    plot_all_histograms = getattr(args, "plot_all_histograms", False)
 
     needs_residual_maps = (
         plot_cmb_recon or plot_systematic_maps or plot_statistical_maps or plot_all
@@ -89,7 +91,14 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         or plot_illustrations
         or plot_all
     )
-    need_patch_maps = plot_illustrations or plot_params or plot_patches or plot_all
+    need_patch_maps = (
+        plot_illustrations
+        or plot_params
+        or plot_patches
+        or plot_all
+        or plot_all_params_residuals
+        or plot_all_histograms
+    )
     need_validation_curves = plot_validation_curves or plot_all or plot_all_metrics
 
     compute_syst = needs_residual_spectra or needs_residual_maps
@@ -108,7 +117,7 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
     }
 
 
-def normalize_indices(
+def _normalize_indices(
     indices: Union[int, tuple[int, int], list[int]],
 ) -> list[int]:
     """Convert indices spec to list of ints.
@@ -129,7 +138,7 @@ def normalize_indices(
     return list(indices)
 
 
-def compute_single_folder(
+def _compute_single_folder(
     folder: str,
     run_index: int,
     nside: int,
@@ -137,7 +146,7 @@ def compute_single_folder(
     flags: dict[str, bool],
     full_results: dict[str, Array] | None = None,
     max_iter: int = 100,
-    solver_name: str = "optax_lbfgs_zoom",
+    solver_name: str = "optax_lbfgs",
 ) -> dict[str, Any] | None:
     """Process a single result folder for a specific run index.
 
@@ -149,12 +158,11 @@ def compute_single_folder(
         flags: Computation flags from `get_compute_flags`.
         full_results: Pre-loaded results.npz contents to avoid reloading. Defaults to None.
         max_iter: Maximum iterations for W computation if not cached. Defaults to 100.
-        solver_name: Solver name for W computation. Defaults to "optax_lbfgs_zoom".
+        solver_name: Solver name for W computation. Defaults to "optax_lbfgs".
 
     Returns:
         Dictionary with computed data for this folder/index, or None if failed.
         Keys include: cmb_recon, cmb_true, mask, indices, NLL, wd, params, patches,
-        updates_history, value_history.
     """
     # Load data
     results_path = f"{folder}/results.npz"
@@ -232,12 +240,6 @@ def compute_single_folder(
         }
 
     # Extract validation curves if needed
-    updates_history = None
-    value_history = None
-    # if flags["need_validation_curves"] and "update_history" in run_data:
-    #    updates_history = run_data["update_history"][..., 0]
-    #    value_history = run_data["update_history"][..., 1]
-    #
     return {
         "cmb_recon": cmb_recon,
         "cmb_true": cmb_true,
@@ -247,8 +249,6 @@ def compute_single_folder(
         "wd": wd,
         "params": params,
         "patches": patches,
-        "updates_history": updates_history,
-        "value_history": value_history,
         "run_data": run_data,
         "best_params": best_params,
     }
@@ -263,6 +263,8 @@ def compute_group(
     flags: dict[str, bool],
     solver_name: str,
     max_iter: int = 100,
+    noise_selection: str = "min-value",
+    sky_tag: str = "c1d0s0",
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]] | None:
     """Process a group of folders for given run indices.
 
@@ -275,6 +277,8 @@ def compute_group(
         flags: Computation flags from `get_compute_flags`.
         solver_name: Solver name for W computation.
         max_iter: Maximum iterations for W computation if not cached. Defaults to 100.
+        noise_selection: Noise selection strategy for parameter maps. Defaults to "min-value".
+        sky_tag: Sky model tag to use for true parameters. Defaults to "c1d0s0".
 
     Returns:
         A tuple (cmb_pytree, cl_pytree, r_pytree, residual_pytree, plotting_data) if successful,
@@ -284,13 +288,12 @@ def compute_group(
         warning(f"No folders provided for '{title}'")
         return None
 
-    indices_spec = normalize_indices(run_indices)
+    indices_spec = _normalize_indices(run_indices)
 
     # Collect data from all folders/indices
     cmb_recons, cmb_maps, masks = [], [], []
     indices_list, w_d_list, NLLs = [], [], []
-    params_list, patches_list = [], []
-    updates_history_list, value_history_list = [], []
+    params_list, patches_list, raw_params_list = [], [], []
 
     previous_mask_size = {
         "beta_dust_patches": 0,
@@ -312,7 +315,7 @@ def compute_group(
             continue
 
         for run_index in indices_spec:
-            result = compute_single_folder(
+            result = _compute_single_folder(
                 folder,
                 run_index,
                 nside,
@@ -335,15 +338,12 @@ def compute_group(
                 w_d_list.append(result["wd"])
 
             if result["params"] is not None and result["patches"] is not None:
-                params, patches, previous_mask_size = params_to_maps(
-                    result["run_data"], previous_mask_size
+                params, raw_params, patches, previous_mask_size = params_to_maps(
+                    result["run_data"], previous_mask_size, noise_selection=noise_selection
                 )
                 params_list.append(params)
                 patches_list.append(patches)
-
-            if result["updates_history"] is not None:
-                updates_history_list.append(result["updates_history"])
-                value_history_list.append(result["value_history"])
+                raw_params_list.append(raw_params)
 
     if len(masks) == 0:
         warning(f"No valid data found for '{title}'. Skipping this run.")
@@ -363,9 +363,22 @@ def compute_group(
     NLL_summed = np.sum(NLLs, axis=0)
 
     # Params and patches maps
+    true_params = None
     if flags["need_patch_maps"] and params_list:
         params_map = combine_masks(params_list, indices_list, nside)
         patches_map = combine_masks(patches_list, indices_list, nside)
+
+        # Get True Parameters
+        sky = get_sky(nside=nside, tag=sky_tag)
+        # Assuming standard FURAX sky components: CMB (0), Dust (1), Synchrotron (2)
+        true_params = {
+            "beta_dust": sky.components[1].mbb_index.value,
+            "temp_dust": sky.components[1].mbb_temperature.value,
+            "beta_pl": sky.components[2].pl_index.value,
+        }
+        # Mask true params
+        true_params = {k: np.where(full_mask, v, hp.UNSEEN) for k, v in true_params.items()}
+
     else:
         params_map = None
         patches_map = {
@@ -469,8 +482,8 @@ def compute_group(
     }
     plotting_data = {
         "params_map": params_map,
-        "updates_history": updates_history_list if updates_history_list else None,
-        "value_history": value_history_list if value_history_list else None,
+        "true_params": true_params,
+        "all_params": raw_params_list,
     }
 
     return (
@@ -490,6 +503,8 @@ def compute_all(
     max_iter: int,
     solver_name: str,
     titles: dict[str, str] | None = None,
+    noise_selection: str = "min-value",
+    sky_tag: str = "c1d0s0",
 ) -> OrderedDict[
     str, tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]
 ]:
@@ -503,6 +518,8 @@ def compute_all(
         max_iter: Maximum iterations for W computation if not cached.
         solver_name: Solver name for W computation.
         titles: Dictionary mapping keywords to title strings. Defaults to None.
+        noise_selection: Noise selection strategy for parameter maps. Defaults to "min-value".
+        sky_tag: Sky model tag to use for true parameters. Defaults to "c1d0s0".
 
     Returns:
         OrderedDict keyed by title with values:
@@ -530,6 +547,8 @@ def compute_all(
             flags=flags,
             max_iter=max_iter,
             solver_name=solver_name,
+            noise_selection=noise_selection,
+            sky_tag=sky_tag,
         )
 
         if result is not None:

@@ -116,7 +116,9 @@ def debug(message: str) -> None:
         >>> debug("Variable x = 5")
         [DEBUG] Variable x = 5
     """
+    print(f"{Colors.DIM}[DEBUG] " + "=" * 60 + Colors.RESET)
     print(f"{Colors.DIM}[DEBUG] {message}{Colors.RESET}")
+    print(f"{Colors.DIM}[DEBUG] " + "=" * 60 + Colors.RESET)
 
 
 def banner(message: str, char: str = "=", width: int = 60) -> None:

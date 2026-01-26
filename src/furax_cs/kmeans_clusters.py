@@ -5,6 +5,8 @@ assignments used in adaptive component separation. The clustering allows
 different spectral parameters in different sky regions.
 """
 
+from typing import Optional
+
 import jax
 import jax.numpy as jnp
 from jax_healpy.clustering import (
@@ -20,7 +22,7 @@ def kmeans_clusters(
     mask: Float[Array, " npix"],
     indices: Int[Array, " n_valid"],
     regions: dict[str, int],
-    max_patches: dict[str, int] | None = None,
+    max_patches: Optional[dict[str, int]] = None,
     initial_sample_size: int = 1,
 ) -> dict[str, Int[Array, " n_valid"]]:
     """Generate K-means cluster assignments for spectral parameter optimization.

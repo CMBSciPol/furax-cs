@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from functools import partial
-from typing import Any, Union
+from typing import Any, Optional
 
 import equinox as eqx
 import jax
@@ -53,8 +52,8 @@ class ScipyMinimizeState(eqx.Module):
 def scipy_minimize(
     fn: Callable[..., Scalar],
     init_params: PyTree[Float[Array, " P"]],
-    lower_bound: PyTree[Float[Array, " P"]] | None = None,
-    upper_bound: PyTree[Float[Array, " P"]] | None = None,
+    lower_bound: Optional[PyTree[Float[Array, " P"]]] = None,
+    upper_bound: Optional[PyTree[Float[Array, " P"]]] = None,
     method: str = "tnc",
     maxiter: int = 1000,
     **fn_kwargs: Any,
@@ -100,12 +99,22 @@ def scipy_minimize(
         def scipy_fn(params, fn_kwargs):
             return fn(params, **fn_kwargs)
 
+        # Scipy method handling
+        solver_options = {"disp": False}
+        if method == "cobyqa":
+            try:
+                import cobyqa  # noqa: F401
+            except ImportError:
+                raise ImportError(
+                    "cobyqa not installed. Please install it with `pip install cobyqa`."
+                )
+
         solver = ScipyBoundedMinimize(
             fun=scipy_fn,
             method=method,
             jit=False,
             maxiter=maxiter,
-            options={"disp": True},
+            options=solver_options,
         )
 
         res = solver.run(x_init, bounds=bounds, fn_kwargs=fn_kwargs)
@@ -145,23 +154,49 @@ def scipy_minimize(
 
 
 # =============================================================================
+# UNIFIED STATE
+# =============================================================================
+
+
+class UnifiedState(eqx.Module):
+    """Unified optimization state.
+
+    Attributes
+    ----------
+    best_loss : Scalar
+        Best objective function value found.
+    best_y : PyTree
+        Best parameters found (in original space).
+    iter_num : Scalar
+        Number of iterations performed.
+    solver_state : Any
+        Internal solver state (Optimistix state or ScipyMinimizeState).
+    """
+
+    best_loss: Scalar
+    best_y: PyTree[Float[Array, " P"]]
+    iter_num: Scalar
+    solver_state: Any
+
+
+# =============================================================================
 # UNIFIED OPTIMIZATION INTERFACE
 # =============================================================================
 
 
-@partial(jax.jit, static_argnames=("fn", "solver_name", "max_iter", "precondition"))
 def minimize(
     fn: Callable[..., Scalar],
     init_params: PyTree[Float[Array, " P"]],
-    solver_name: SOLVER_NAMES = "optax_lbfgs_zoom",
+    solver_name: SOLVER_NAMES = "optax_lbfgs",
     max_iter: int = 1000,
     rtol: float = 1e-8,
     atol: float = 1e-8,
-    lower_bound: PyTree[Float[Array, " P"]] | None = None,
-    upper_bound: PyTree[Float[Array, " P"]] | None = None,
+    lower_bound: Optional[PyTree[Float[Array, " P"]]] = None,
+    upper_bound: Optional[PyTree[Float[Array, " P"]]] = None,
     precondition: bool = False,
+    solver_options: dict[str, Any] = {},
     **fn_kwargs: Any,
-) -> tuple[PyTree[Float[Array, " P"]], Union[optx.Solution, ScipyMinimizeState]]:
+) -> tuple[PyTree[Float[Array, " P"]], UnifiedState]:
     """
     Unified optimization interface.
 
@@ -184,6 +219,8 @@ def minimize(
         Box constraints.
     precondition : bool
         Whether to apply parameter transformation and output scaling.
+    solver_options : dict, optional
+        Additional arguments passed to the solver factory (get_solver).
     **fn_kwargs
         Additional arguments passed to fn.
 
@@ -191,8 +228,8 @@ def minimize(
     -------
     final_params : PyTree
         Optimized parameters.
-    final_state : Any
-        Final optimizer state.
+    final_state : UnifiedState
+        Final optimizer state containing best loss, best parameters, iteration count, and solver state.
     """
 
     if solver_name in SELFCONDITIONED_SOLVERS and precondition:
@@ -214,8 +251,14 @@ def minimize(
     else:
         from_opt = lambda x: x
 
+    solver_opts = solver_options if solver_options is not None else {}
     solver, solver_type = get_solver(
-        solver_name, rtol=rtol, atol=atol, lower=lower_bound, upper=upper_bound
+        solver_name,
+        rtol=rtol,
+        atol=atol,
+        lower=lower_bound,
+        upper=upper_bound,
+        **solver_opts,
     )
 
     if solver_type == "optimistix":
@@ -232,11 +275,28 @@ def minimize(
             throw=False,
             args=fn_kwargs,
         )
-        return from_opt(sol.value), sol
+
+        unified_state = UnifiedState(
+            best_loss=sol.state.best_loss,
+            best_y=from_opt(sol.state.best_y),
+            iter_num=sol.stats["num_steps"],
+            solver_state=sol.state,
+        )
+        return from_opt(sol.value), unified_state
 
     elif solver_type == "scipy":
         # Scipy via vmap-compatible scipy_minimize
         method = solver_name.split("_")[1]
+        options = solver_options.get("options", {})
+        if method == "tnc":
+            options["ftol"] = atol
+            options["gtol"] = rtol
+            options["xtol"] = atol
+        elif method == "l-bfgs-b":
+            options["ftol"] = atol
+            options["gtol"] = rtol
+        elif method == "cobyqa":  # COBYQA
+            options["final_tr_radius"] = atol
         state = scipy_minimize(
             fn=fn,
             init_params=init_params,
@@ -246,7 +306,15 @@ def minimize(
             maxiter=max_iter,
             **fn_kwargs,
         )
-        return from_opt(state.params), state
+
+        unified_state = UnifiedState(
+            best_loss=state.fun_val,
+            best_y=from_opt(state.params),
+            iter_num=state.iter_num,
+            solver_state=state,
+        )
+
+        return from_opt(state.params), unified_state
 
     else:
         raise ValueError(f"Unknown solver type: {solver_type}")

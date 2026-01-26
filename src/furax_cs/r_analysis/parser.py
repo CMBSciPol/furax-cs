@@ -49,6 +49,12 @@ def parse_args() -> argparse.Namespace:
         "--no-tex", action="store_true", help="Disable LaTeX rendering for plot text"
     )
     common_parser.add_argument(
+        "--sky",
+        type=str,
+        default="c1d0s0",
+        help="Sky model tag to use for true parameters (default: c1d0s0)",
+    )
+    common_parser.add_argument(
         "-mi",
         "--max-iterations",
         type=int,
@@ -59,8 +65,8 @@ def parse_args() -> argparse.Namespace:
         "-s",
         "--solver",
         type=str,
-        default="optax_lbfgs_zoom",
-        help="Solver for optimization. Options: optax_lbfgs_zoom, optax_lbfgs_backtrack, "
+        default="optax_lbfgs",
+        help="Solver for optimization. Options: optax_lbfgs, optax_lbfgs, "
         "optimistix_bfgs_wolfe, optimistix_lbfgs_wolfe, optimistix_ncg_hs_wolfe, "
         "scipy_tnc, zoom (alias), backtrack (alias), adam",
     )
@@ -112,6 +118,12 @@ ARGUMENT NOTES:
         required=True,
         help="Directory/File to save the computed snapshot data",
     )
+    parser_snap.add_argument(
+        "--noise-selection",
+        type=str,
+        default="min-value",
+        help="Noise realization selection for plotting: 'min-value' (default), 'min-nll', or an integer index.",
+    )
 
     # ==========================================
     # 2. PLOT SUBCOMMAND
@@ -128,6 +140,9 @@ ARGUMENT NOTES:
         default="SNAPSHOT",
     )
     parser_plot.add_argument(
+        "-o", "--output", type=str, help="Output directory for plots", default="plots/"
+    )
+    parser_plot.add_argument(
         "--output-format",
         type=str,
         choices=["png", "pdf", "show"],
@@ -139,6 +154,12 @@ ARGUMENT NOTES:
         type=int,
         default=14,
         help="Font size for plots",
+    )
+    parser_plot.add_argument(
+        "--noise-selection",
+        type=str,
+        default="min-value",
+        help="Noise realization selection for plotting: 'min-value' (default), 'min-nll', or an integer index.",
     )
     parser_plot.add_argument(
         "-t", "--titles", type=str, nargs="*", help="List of titles for the plots", default=None
@@ -207,6 +228,18 @@ ARGUMENT NOTES:
     vis_group.add_argument(
         "-ar", "--plot-all-r-estimation", action="store_true", help="Plot R estimation comparison"
     )
+    vis_group.add_argument(
+        "-appr",
+        "--plot-all-params-residuals",
+        action="store_true",
+        help="Plot residuals for all parameters (Map + Residual vs Truth)",
+    )
+    vis_group.add_argument(
+        "-ah",
+        "--plot-all-histograms",
+        action="store_true",
+        help="Plot histograms of True params and all pixels/realizations",
+    )
 
     # Correlations
     vis_group.add_argument(
@@ -236,17 +269,17 @@ ARGUMENT NOTES:
         help="Steps for validation perturbation (default: 5).",
     )
     parser_validate.add_argument(
-        "--noise-ratio",
-        type=float,
-        default=0.0,
-        help="Noise ratio (0.0 to 1.0). Default: 0.0",
-    )
-    parser_validate.add_argument(
         "--scales",
         type=float,
         nargs="+",
         default=[1e-3, 1e-4],
         help="Scales for validation perturbation (default: [1e-3, 1e-4]).",
+    )
+    parser_validate.add_argument(
+        "--noise-selection",
+        type=str,
+        default="min-value",
+        help="Noise realization selection: 'min-value' (default), 'min-nll', or an integer index.",
     )
     parser_validate.add_argument(
         "-t", "--titles", type=str, nargs="*", help="List of titles for the plots", default=None
@@ -262,19 +295,19 @@ ARGUMENT NOTES:
         "--perturb-beta-dust",
         type=str,
         default="all",
-        help="Perturbation spec for beta_dust: 'all' (default), '-1' (skip), '0:30' (slice), '0,1,2' (indices).",
+        help="Perturbation spec for beta_dust: 'all' (default), '-1' (skip), '0:30' (slice), '0,1,2' (indices), 'max', 'min'.",
     )
     parser_validate.add_argument(
         "--perturb-beta-pl",
         type=str,
         default="all",
-        help="Perturbation spec for beta_pl: 'all' (default), '-1' (skip), '0:30' (slice), '0,1,2' (indices).",
+        help="Perturbation spec for beta_pl: 'all' (default), '-1' (skip), '0:30' (slice), '0,1,2' (indices), 'max', 'min'.",
     )
     parser_validate.add_argument(
         "--perturb-temp-dust",
         type=str,
         default="all",
-        help="Perturbation spec for temp_dust: 'all' (default), '-1' (skip), '0:30' (slice), '0,1,2' (indices).",
+        help="Perturbation spec for temp_dust: 'all' (default), '-1' (skip), '0:30' (slice), '0,1,2' (indices), 'max', 'min'.",
     )
     parser_validate.add_argument(
         "--aggregate",
@@ -285,6 +318,22 @@ ARGUMENT NOTES:
         "--no-vmap",
         action="store_true",
         help="Use for-loop instead of vmap (slower but uses less memory).",
+    )
+    parser_validate.add_argument(
+        "--output-format",
+        type=str,
+        choices=["png", "pdf", "show"],
+        default="png",
+        help="Output format: png, pdf, or show (inline)",
+    )
+    parser_validate.add_argument(
+        "-o", "--output", type=str, help="Output directory for plots", default="plots/"
+    )
+    parser_validate.add_argument(
+        "--font-size",
+        type=int,
+        default=14,
+        help="Font size for plots",
     )
 
     # ==========================================

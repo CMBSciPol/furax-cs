@@ -18,6 +18,7 @@ dependencies = [
   "pysm3",
   "astropy",
   "optimistix@git+https://github.com/ASKabalan/optimistix@add-progress",
+  "cobyqa",
   "jaxopt"
 ]
 description = "CMB component separation comparison: FURAX vs FGBuster"

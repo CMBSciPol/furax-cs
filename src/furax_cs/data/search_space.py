@@ -11,26 +11,23 @@ from jaxtyping import (
 )
 
 
-def load_search_space(filepath: Union[str, Path] | None = None) -> dict[str, Int[Array, N]]:
+def load_search_space(filepath: Union[str, Path] | None = None) -> dict[str, Int[Array, " N"]]:
     """Load search space configuration from YAML file.
 
-    Parameters
-    ----------
-    filepath : str, Path, or None
-        Path to custom search space YAML file. If None, loads the default
-        configuration from search_spaces_default.yaml.
+    Args:
+        filepath: Path to custom search space YAML file. If None, loads the default
+            configuration from search_spaces_default.yaml.
 
-    Returns
-    -------
-    dict
+    Returns:
         Dictionary with JAX arrays for T_d_patches, B_d_patches, B_s_patches.
 
-    Raises
-    ------
-    FileNotFoundError
-        If the specified filepath does not exist.
-    ValueError
-        If the YAML file is missing required keys or has invalid values.
+    Raises:
+        FileNotFoundError: If the specified filepath does not exist.
+        ValueError: If the YAML file is missing required keys or has invalid values.
+
+    Example:
+        >>> space = load_search_space()
+        >>> print(space["T_d_patches"])
     """
     if filepath is None:
         # Load default configuration from data directory
@@ -60,20 +57,20 @@ def load_search_space(filepath: Union[str, Path] | None = None) -> dict[str, Int
     return search_space
 
 
-def search_space_to_jax(config: dict[str, Any]) -> dict[str, Int[Array, N]]:
+def search_space_to_jax(config: dict[str, Any]) -> dict[str, Int[Array, " N"]]:
     """Convert search space configuration from YAML to JAX arrays.
 
-    Parameters
-    ----------
-    config : dict
-        Dictionary with search space parameters as lists or numpy arrays.
+    Args:
+        config: Dictionary with search space parameters as lists or numpy arrays.
 
-    Returns
-    -------
-    dict
+    Returns:
         Dictionary with JAX arrays ready for grid search.
+
+    Example:
+        >>> config = {"T_d_patches": [1, 2], "B_d_patches": [3, 4], "B_s_patches": [5]}
+        >>> jax_space = search_space_to_jax(config)
     """
-    search_space: dict[str, Int[Array, N]] = {}
+    search_space: dict[str, Int[Array, " N"]] = {}
 
     # Convert T_d_patches
     if "T_d_patches" in config:
@@ -100,15 +97,15 @@ def dump_default_search_space(output_path: Union[str, Path]) -> None:
 
     This creates a template file that users can customize for their needs.
 
-    Parameters
-    ----------
-    output_path : str or Path
-        Path where the default search space YAML will be saved.
+    Args:
+        output_path: Path where the default search space YAML will be saved.
 
-    Raises
-    ------
-    IOError
-        If the file cannot be written.
+    Raises:
+        FileNotFoundError: If the default config file is missing in the package.
+        IOError: If the output file cannot be written.
+
+    Example:
+        >>> dump_default_search_space("my_search_space.yaml")
     """
     output_path = Path(output_path)
 
@@ -133,18 +130,17 @@ def dump_default_search_space(output_path: Union[str, Path]) -> None:
     print("You can now edit this file to customize the search space.")
 
 
-def validate_search_space(search_space: dict[str, Int[Array, N]]) -> None:
+def validate_search_space(search_space: dict[str, Int[Array, " N"]]) -> None:
     """Validate that search space has valid structure and values.
 
-    Parameters
-    ----------
-    search_space : dict
-        Dictionary with JAX arrays for search space parameters.
+    Args:
+        search_space: Dictionary with JAX arrays for search space parameters.
 
-    Raises
-    ------
-    ValueError
-        If validation fails.
+    Raises:
+        ValueError: If validation fails (missing keys, empty arrays, invalid values).
+
+    Example:
+        >>> validate_search_space(search_space)
     """
     required_keys = ["T_d_patches", "B_d_patches", "B_s_patches"]
 

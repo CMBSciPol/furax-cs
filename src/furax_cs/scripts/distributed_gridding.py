@@ -187,8 +187,8 @@ def parse_args() -> argparse.Namespace:
         "-s",
         "--solver",
         type=str,
-        default="optax_lbfgs_zoom",
-        help="Solver for optimization. Options: optax_lbfgs_zoom, optax_lbfgs_backtrack, "
+        default="optax_lbfgs",
+        help="Solver for optimization. Options: optax_lbfgs, optax_lbfgs, "
         "optimistix_bfgs_wolfe, optimistix_lbfgs_wolfe, optimistix_ncg_hs_wolfe, "
         "scipy_tnc, zoom (alias), backtrack (alias), adam",
     )

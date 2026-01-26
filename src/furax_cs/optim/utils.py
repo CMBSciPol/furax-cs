@@ -10,24 +10,24 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import wraps
-from typing import Any
+from typing import Any, Optional
 
 import jax
 from jaxtyping import Array, Float, PyTree
 from lineax.internal import two_norm
 
-Params = PyTree[Float[Array, "P"]]
-TransformedParams = PyTree[Float[Array, "P"]]
+Params = PyTree[Float[Array, " P"]]
+TransformedParams = PyTree[Float[Array, " P"]]
 Transformation = Callable[[Params], TransformedParams]
 ConditionedFn = Callable[..., Float[Array, ""]]
 
 
 def condition(
     fn: Callable[..., Float[Array, ""]],
-    lower: Params | None = None,
-    upper: Params | None = None,
+    lower: Optional[Params] = None,
+    upper: Optional[Params] = None,
     scale_function: bool = False,
-    init_params: Params | None = None,
+    init_params: Optional[Params] = None,
     *args: Any,
     **kwargs: Any,
 ) -> tuple[ConditionedFn, Transformation, Transformation]:
