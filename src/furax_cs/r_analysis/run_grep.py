@@ -5,7 +5,7 @@ from typing import Union
 from ..logging_utils import info
 
 
-def is_regex_token(token: str) -> bool:
+def _is_regex_token(token: str) -> bool:
     """Check if a single token contains regex metacharacters (not just OR syntax)."""
     groups = re.findall(r"\(([^)]+)\)", token)
     for group in groups:
@@ -15,13 +15,13 @@ def is_regex_token(token: str) -> bool:
     return False
 
 
-def is_regex_pattern(pattern: str) -> bool:
+def _is_regex_pattern(pattern: str) -> bool:
     """Check if pattern contains any regex tokens."""
     tokens = pattern.split("_")
-    return any(is_regex_token(token) for token in tokens)
+    return any(_is_regex_token(token) for token in tokens)
 
 
-def match_token_regex(folder_tokens: list[str], pattern_token: str) -> str | None:
+def _match_token_regex(folder_tokens: list[str], pattern_token: str) -> str | None:
     """Match pattern token against folder tokens using regex, return matched token or None."""
     try:
         regex = re.compile(f"^{pattern_token}$")
@@ -33,7 +33,7 @@ def match_token_regex(folder_tokens: list[str], pattern_token: str) -> str | Non
     return None
 
 
-def match_folder_with_regex_tokens(
+def _match_folder_with_regex_tokens(
     folder_tokens: list[str], pattern_tokens: list[str]
 ) -> tuple[bool, dict[int, str]]:
     """Match folder tokens against pattern tokens, some of which may be regex.
@@ -43,9 +43,9 @@ def match_folder_with_regex_tokens(
     """
     captures = {}
     for i, pat_token in enumerate(pattern_tokens):
-        if is_regex_token(pat_token):
+        if _is_regex_token(pat_token):
             # Regex token: find a matching folder token
-            matched = match_token_regex(folder_tokens, pat_token)
+            matched = _match_token_regex(folder_tokens, pat_token)
             if matched is None:
                 return False, {}
             captures[i] = matched
@@ -61,7 +61,7 @@ def match_folder_with_regex_tokens(
     return True, captures
 
 
-def expand_pattern_with_captures(pattern_tokens: list[str], captures: dict[int, str]) -> str:
+def _expand_pattern_with_captures(pattern_tokens: list[str], captures: dict[int, str]) -> str:
     """Build expanded pattern name by replacing regex tokens with captured values."""
     result_tokens = []
     for i, token in enumerate(pattern_tokens):
@@ -72,7 +72,7 @@ def expand_pattern_with_captures(pattern_tokens: list[str], captures: dict[int, 
     return "_".join(result_tokens)
 
 
-def parse_run_spec(run_spec: str) -> tuple[str, Union[int, tuple[int, int]]]:
+def _parse_run_spec(run_spec: str) -> tuple[str, Union[int, tuple[int, int]]]:
     """Parse a run spec string into filter and index information."""
     if "," not in run_spec:
         return run_spec, 0
@@ -87,7 +87,7 @@ def parse_run_spec(run_spec: str) -> tuple[str, Union[int, tuple[int, int]]]:
         return filter_part, int(index_part)
 
 
-def parse_filter_kw(kw_string: str) -> list[set[str]]:
+def _parse_filter_kw(kw_string: str) -> list[set[str]]:
     """Split run keywords into AND-of-OR groups for matching."""
     groups = kw_string.split("_")
     parsed = []
@@ -100,12 +100,12 @@ def parse_filter_kw(kw_string: str) -> list[set[str]]:
     return parsed
 
 
-def matches_filter(name_parts: list[str], filter_groups: list[set[str]]) -> bool:
+def _matches_filter(name_parts: list[str], filter_groups: list[set[str]]) -> bool:
     """Return True if the keyword groups all match the provided name parts."""
     return all(any(option in name_parts for option in group) for group in filter_groups)
 
 
-def get_root_dir_from_paths(paths: list[str], irds: list[str]) -> str:
+def _get_root_dir_from_paths(paths: list[str], irds: list[str]) -> str:
     """Extract root directory from paths, relative to input results directories."""
     if not paths:
         return ""
@@ -170,30 +170,30 @@ def run_grep(
     # 2. Match specs
     matches = {}
     for spec in run_specs:
-        filter_str, index_spec = parse_run_spec(spec)
+        filter_str, index_spec = _parse_run_spec(spec)
         pattern_tokens = filter_str.split("_")
 
-        if is_regex_pattern(filter_str):
+        if _is_regex_pattern(filter_str):
             # Regex mode: group by captured values
             grouped = {}
             for path, folder_tokens in all_results.items():
-                matched, captures = match_folder_with_regex_tokens(folder_tokens, pattern_tokens)
+                matched, captures = _match_folder_with_regex_tokens(folder_tokens, pattern_tokens)
                 if matched and captures:
-                    expanded = expand_pattern_with_captures(pattern_tokens, captures)
+                    expanded = _expand_pattern_with_captures(pattern_tokens, captures)
                     grouped.setdefault(expanded, []).append(path)
 
             # Add each group as separate entry
             for expanded_name, paths in grouped.items():
-                root = get_root_dir_from_paths(paths, result_folders)
+                root = _get_root_dir_from_paths(paths, result_folders)
                 matches[expanded_name] = (paths, index_spec, root)
         else:
             # Token mode: existing logic
-            filter_groups = parse_filter_kw(filter_str)
+            filter_groups = _parse_filter_kw(filter_str)
             matched_paths = []
             for path, tokens in all_results.items():
-                if matches_filter(tokens, filter_groups):
+                if _matches_filter(tokens, filter_groups):
                     matched_paths.append(path)
-            root = get_root_dir_from_paths(matched_paths, result_folders)
+            root = _get_root_dir_from_paths(matched_paths, result_folders)
             matches[spec] = (matched_paths, index_spec, root)
 
     return matches

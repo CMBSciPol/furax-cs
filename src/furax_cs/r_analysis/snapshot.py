@@ -247,6 +247,7 @@ def run_snapshot(
     flags: dict[str, bool],
     max_iter: int,
     solver_name: str,
+    noise_selection: str,
 ) -> int:
     """Entry point for 'snap' subcommand.
 
@@ -271,7 +272,15 @@ def run_snapshot(
 
     if to_compute:
         info(f"Computing {len(to_compute)} missing entries...")
-        computed = compute_all(to_compute, nside, instrument, flags, max_iter, solver_name)
+        computed = compute_all(
+            to_compute,
+            nside,
+            instrument,
+            flags,
+            max_iter,
+            solver_name,
+            noise_selection=noise_selection,
+        )
         save_snapshot(snapshot_path, computed)
         success(f"Saved {len(computed)} new entries to snapshot at {snapshot_path}")
     else:

@@ -105,7 +105,9 @@ def sort_results(results: Mapping[str, Array], key: str) -> Mapping[str, Array]:
 
 
 def params_to_maps(
-    run_data: Mapping[str, Array], previous_mask_size: Mapping[str, int]
+    run_data: Mapping[str, Array],
+    previous_mask_size: Mapping[str, int],
+    noise_selection: str = "min-value",
 ) -> tuple[dict[str, Array], dict[str, Array], Mapping[str, int]]:
     """Convert per-cluster parameter arrays to HEALPix maps.
 
@@ -115,6 +117,8 @@ def params_to_maps(
         Output of a clustering run containing parameters and patch indices.
     previous_mask_size : Mapping[str, int]
         Offsets that keep cluster labels unique across disjoint sky regions.
+    noise_selection : str
+        Strategy to select noise realization: 'min-value', 'min-nll', 'idx'.
 
     Returns
     -------
@@ -127,8 +131,20 @@ def params_to_maps(
     T_d_patches = run_data["temp_dust_patches"]
     B_s_patches = run_data["beta_pl_patches"]
 
-    cmb_variance = run_data["value"]
-    indx = np.argmin(cmb_variance)
+    # Select the noise realization based on strategy
+    if noise_selection == "min-nll":
+        indx = np.argmin(run_data["NLL"])
+    elif noise_selection == "min-value":
+        indx = np.argmin(run_data["value"])
+    else:
+        # Fallback: try parsing as int
+        try:
+            indx = int(noise_selection)
+            assert 0 <= indx < run_data["value"].shape[0]
+        except ValueError:
+            raise ValueError(
+                f"Unknown noise selection: {noise_selection}. Use 'min-value', 'min-nll', 'idx' or an integer."
+            )
 
     B_d = run_data["beta_dust"]
     T_d = run_data["temp_dust"]
@@ -144,6 +160,11 @@ def params_to_maps(
         "temp_dust_patches": T_d_patches,
         "beta_pl_patches": B_s_patches,
     }
+    raw_params = {
+        "beta_dust": B_d,
+        "temp_dust": T_d,
+        "beta_pl": B_s,
+    }
 
     def normalize_array(arr: Array) -> Array:
         _, indices = np.unique(arr, return_inverse=True)
@@ -155,4 +176,4 @@ def params_to_maps(
         lambda x, p: p + np.unique(x).size, patches_final, previous_mask_size
     )
 
-    return params, patches_final, previous_mask_size_updated
+    return params, raw_params, patches_final, previous_mask_size_updated

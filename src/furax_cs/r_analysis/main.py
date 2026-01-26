@@ -73,6 +73,7 @@ def run_analysis() -> int | None:
             flags,
             args.max_iterations,
             args.solver,
+            noise_selection=args.noise_selection,
         )
 
     if args.subcommand == "plot":
@@ -101,6 +102,9 @@ def run_analysis() -> int | None:
             args.max_iterations,
             args.output_format,
             args.font_size,
+            output_dir=args.output,
+            noise_selection=args.noise_selection,
+            sky_tag=args.sky,
         )
 
     if args.subcommand == "validate":
@@ -119,14 +123,17 @@ def run_analysis() -> int | None:
             nside,
             instrument,
             args.steps,
-            args.noise_ratio,
             args.scales,
             plot_type=args.plot_type,
             perturb_beta_dust=args.perturb_beta_dust,
             perturb_beta_pl=args.perturb_beta_pl,
             perturb_temp_dust=args.perturb_temp_dust,
+            noise_selection=args.noise_selection,
             aggregate=args.aggregate,
             use_vmap=not args.no_vmap,
+            output_format=args.output_format,
+            font_size=args.font_size,
+            output_dir=args.output,
         )
 
 
