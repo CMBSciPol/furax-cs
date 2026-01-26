@@ -8,10 +8,10 @@ The `solver_name` argument in the `minimize` function accepts the following:
 
 ### Recommended
 *   **`active_set`**: **Best for noisy maps.** Uses a projected gradient method with active set constraints. Robust against noise but might be slower on very clean data.
-*   **`optax_lbfgs_zoom`**: **Best for noiseless runs.** L-BFGS with zoom linesearch (Strong Wolfe conditions). Very fast and accurate for smooth, noise-free landscapes.
+*   **`optax_lbfgs`**: **Best for noiseless runs.** L-BFGS with zoom linesearch (Strong Wolfe conditions). Very fast and accurate for smooth, noise-free landscapes.
 
 ### Other Options
-*   `optax_lbfgs_backtrack`: L-BFGS with backtracking linesearch (Armijo condition).
+*   `optax_lbfgs`: L-BFGS.
 *   `adam`: Simple Adam optimizer (good for stochastic settings).
 *   `scipy_tnc`: Wrapper for SciPy's Truncated Newton (TNC).
 *   `optimistix_bfgs`: Standard BFGS from Optimistix.
@@ -27,7 +27,7 @@ from furax_cs import minimize
 final_params, state = minimize(
     fn=my_loss_fn,
     init_params=params,
-    solver_name="active_set",  # or "optax_lbfgs_zoom"
+    solver_name="active_set",  # or "optax_lbfgs"
     lower_bound=lower,
     upper_bound=upper,
     **kwargs
@@ -60,8 +60,8 @@ f_struct = jax.ShapeDtypeStruct((), jnp.float32)
 print(f"{'Loss':<12} | {'Step':<5} | {'Status':<10} | {'Final Params':<30}")
 print("-" * 55)
 
-# active_set or optax_lbfgs_zoom for example
-solver, _ = get_solver("optax_lbfgs_zoom", rtol=1e-6, atol=1e-6)
+# active_set or optax_lbfgs for example
+solver, _ = get_solver("optax_lbfgs", rtol=1e-6, atol=1e-6)
 
 state = solver.init(simple_loss, init_params, target ,{}  , f_struct , None , frozenset())
 step = partial(solver.step, fn=simple_loss, args=target, options={}, tags=frozenset())
