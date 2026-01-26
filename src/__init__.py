@@ -1,1 +1,1 @@
-"""Source code for furax-compsep-paper."""
+"""Source code for furax-cs."""
