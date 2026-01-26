@@ -16,11 +16,17 @@ Furax CS is a comprehensive software package designed for Component Separation f
 The main tool is the minimizer provided under the name of Furax ADABK4 which is an adaptive gradient based optimizer specifically designed to handle extremely noise dominated data such as CMB observations and physical bound constraints.
 The minimizer is orders of magnitude faster than traditional minimizers such as Scipy-TNC and is able to reach lower minima in fewer iterations.
 
-![Runtime Comparison](notebooks/runtime_comparison.png)
+<p align="center">
+  <img src="notebooks/runtime_comparison.png" alt="Runtime Comparison" width="400"/>
+</p>
 
 This provides a much easier and faster way to explore the spatial variability of foregrounds and their impact on the CMB recovery.
 
-![r Likelihood Comparison](docs/images/r_likelihood_comparison.png)
+This has an impact on the estimated r tensor-to-scalar ratio as shown in the figure below where we compare the likelihood profiles obtained with using the KMeans spatial clustering gridding runs and compared with [LiteBIRD PTEP-like](https://arxiv.org/abs/2202.02773) run obtained using FGBuster using multiresolution spatial clustering.
+
+<p align="center">
+  <img src="docs/images/r_likelihood_comparison.png" alt="r Likelihood Comparison" width="450"/>
+</p>
 
 ---
 
