@@ -14,7 +14,7 @@ Example usage:
     >>> params, state = minimize(
     ...     fn=objective,
     ...     init_params={'beta': 1.5},
-    ...     solver_name='optax_lbfgs_zoom',
+    ...     solver_name='optax_lbfgs',
     ... )
 """
 
