@@ -8,13 +8,35 @@ from jaxtyping import Array, Float
 def select_best_params(
     results: dict[str, Any], best_metric: str = "value", nb_best: int = 4
 ) -> tuple[Float[Array, "nb_best 2"], Float[Array, "nb_best"], Float[Array, "nb_best"]]:
-    """
-    Find the best nb_best combinations of (T_d, B_s) according to the chosen best_metric
-    ('value' or 'NLL'). Returns:
-      - combos: array of shape (nb_best, 2), each row is (T_d, B_s)
-      - combos_best_value: the minimum 'value' (across B_d) for each returned combo
-      - combos_best_nll: the minimum 'NLL' (across B_d) for each returned combo
-    in sorted order based on best_metric.
+    """Find the best parameter combinations from grid search results.
+
+    Identifies the best combinations of (T_d, B_s) patches based on the chosen metric
+    (function value or NLL), averaging over noise realizations and minimizing over
+    B_d dimensions.
+
+    Args:
+        results: Dictionary containing grid search results. Expected keys:
+            "T_d_patches", "B_s_patches", "value", "NLL".
+        best_metric: Metric to use for ranking ("value" or "NLL"). Defaults to "value".
+        nb_best: Number of top combinations to return. Defaults to 4.
+
+    Returns:
+        A tuple containing:
+            - **combos**: Array of shape (nb_best, 2) with (T_d, B_s) values.
+            - **best_vals**: Best metric values corresponding to combos.
+            - **best_nlls**: NLL values corresponding to combos.
+
+    Raises:
+        ValueError: If best_metric is not "value" or "NLL".
+
+    Example:
+        >>> results = {
+        ...     "T_d_patches": [10, 10, 20, 20],
+        ...     "B_s_patches": [5, 5, 5, 5],
+        ...     "value": np.array([[1.0], [0.9], [0.8], [0.7]]),
+        ...     "NLL": np.array([[10.0], [9.0], [8.0], [7.0]]),
+        ... }
+        >>> best_combos, best_vals, best_nlls = select_best_params(results, nb_best=2)
     """
     T_d_arr = np.array(results["T_d_patches"])
     B_s_arr = np.array(results["B_s_patches"])

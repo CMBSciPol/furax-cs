@@ -4,6 +4,7 @@ This module provides utilities for generating instrumental noise and
 creating noise covariance operators used in likelihood computations.
 """
 
+from functools import partial
 from typing import Literal, Optional
 
 import jax
@@ -16,6 +17,7 @@ from jax_healpy.clustering import get_cutout_from_mask
 from jaxtyping import Array, Int, PRNGKeyArray
 
 
+@partial(jax.jit, static_argnames=("nside", "stokes_type"))
 def generate_noise_operator(
     key: PRNGKeyArray,
     noise_ratio: float,
@@ -104,4 +106,4 @@ def generate_noise_operator(
     # Create diagonal noise covariance operator
     N = NoiseDiagonalOperator(small_n, _in_structure=masked_d.structure)
 
-    return noised_d, N
+    return noised_d, N, small_n
