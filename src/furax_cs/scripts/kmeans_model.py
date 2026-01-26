@@ -143,6 +143,13 @@ EXAMPLES:
         help="Noise level as fraction of signal RMS (0.2 = 20%% noise)",
     )
     parser.add_argument(
+        "-ss",
+        "--seed-start",
+        type=int,
+        default=0,
+        help="Starting seed for noise simulations",
+    )
+    parser.add_argument(
         "-tag",
         "--tag",
         type=str,
@@ -202,8 +209,8 @@ EXAMPLES:
         "-s",
         "--solver",
         type=str,
-        default="optax_lbfgs_zoom",
-        help="Solver for optimization. Options: optax_lbfgs_zoom, optax_lbfgs_backtrack, "
+        default="optax_lbfgs",
+        help="Solver for optimization. Options: optax_lbfgs, optax_lbfgs, "
         "optimistix_bfgs_wolfe, optimistix_lbfgs_wolfe, optimistix_ncg_hs_wolfe, "
         "scipy_tnc, zoom (alias), backtrack (alias), adam",
     )
@@ -228,6 +235,27 @@ EXAMPLES:
         "Only activate this option when using JAX JIT cache (persistent compilation cache) "
         "to avoid recompilation overhead on each run.",
     )
+    parser.add_argument(
+        "-top_k",
+        "--top-k-release",
+        type=float,
+        default=None,
+        help="Fraction of constraints to release in active set solver (e.g., 0.1 for 10%%).",
+    )
+    parser.add_argument(
+        "-ls",
+        "--linesearch",
+        type=str,
+        default="backtracking",
+        choices=["backtracking", "zoom"],
+        help="Linesearch strategy for active_set and optax_lbfgs solvers.",
+    )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default=None,
+        help="Override the default output folder name.",
+    )
     return parser.parse_args()
 
 
@@ -250,9 +278,17 @@ def main():
     # Step 1: Parse arguments and setup output directory
     args = parse_args()
 
-    patches = f"BD{args.patch_count[0]}_TD{args.patch_count[1]}_BS{args.patch_count[2]}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
-    config = f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
-    out_folder = f"{args.output}/kmeans_{args.tag}_{patches}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
+    if args.name is not None:
+        out_folder = f"{args.output}/{args.name}"
+    else:
+        patches = f"BD{args.patch_count[0]}_TD{args.patch_count[1]}_BS{args.patch_count[2]}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
+        config = (
+            f"{args.solver}_cond{args.cond}_ls{args.linesearch}_noise{int(args.noise_ratio * 100)}"
+        )
+        if args.top_k_release is not None:
+            config += f"_topk{args.top_k_release}"
+
+        out_folder = f"{args.output}/kmeans_{args.tag}_{patches}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
 
     # Step 2: Initialize physical and computational parameters
     nside = args.nside
@@ -318,6 +354,11 @@ def main():
         "beta_pl_patches": max_count["beta_pl"],
     }
 
+    solver_options = {}
+    if args.top_k_release is not None:
+        solver_options["max_constraints_to_release"] = args.top_k_release
+    solver_options["linesearch"] = args.linesearch
+
     def compute_minimum_variance(
         T_d_patches: int,
         B_d_patches: int,
@@ -340,7 +381,7 @@ def main():
 
         def single_run(noise_id):
             key = jax.random.PRNGKey(noise_id)
-            noised_d, N = generate_noise_operator(
+            noised_d, N, small_n = generate_noise_operator(
                 key, noise_ratio, indices, nside, masked_d, instrument
             )
 
@@ -349,11 +390,12 @@ def main():
                 init_params=guess_params,
                 solver_name=args.solver,
                 max_iter=args.max_iter,
-                atol=1e-15,
-                rtol=1e-10,
+                atol=1e-16,
+                rtol=1e-16,
                 lower_bound=lower_bound_tree,
                 upper_bound=upper_bound_tree,
                 precondition=args.cond,
+                solver_options=solver_options,
                 nu=nu,
                 N=N,
                 d=noised_d,
@@ -364,6 +406,8 @@ def main():
             cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, cmb))
 
             cmb_np = jnp.stack([cmb.q, cmb.u])
+            noise_d_np = jnp.stack([noised_d.q, noised_d.u])
+            small_n_np = jnp.stack([small_n.q, small_n.u])
 
             nll = negative_log_likelihood_fn(
                 final_params, nu=nu, d=noised_d, N=N, patch_indices=guess_clusters
@@ -376,16 +420,22 @@ def main():
                 "beta_dust": final_params["beta_dust"],
                 "temp_dust": final_params["temp_dust"],
                 "beta_pl": final_params["beta_pl"],
+                "iter_num": final_state.iter_num,
+                "NOISED_D": noise_d_np,
+                "small_n": small_n_np,
             }
 
         if use_vmap:
             # Vmap approach - vectorize over noise simulations
-            results = jax.vmap(single_run)(jnp.arange(nb_noise_sim))
+            results = jax.vmap(single_run)(
+                jnp.arange(args.seed_start, args.seed_start + nb_noise_sim)
+            )
         else:
             # For-loop approach - JIT single_run only
             single_run_jit = jax.jit(single_run)
             results_list = tqdm(
-                [single_run_jit(i) for i in range(nb_noise_sim)], desc="Running noise simulations"
+                [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
+                desc="Running noise simulations",
             )
             results = jax.tree.map(lambda *xs: jnp.stack(xs), *results_list)
         results["beta_dust_patches"] = guess_clusters["beta_dust_patches"]
@@ -420,6 +470,7 @@ def main():
             info(f"min beta_dust: {min_bd} max beta_dust: {max_bd}")
             info(f"min temp_dust: {min_td} max temp_dust: {max_td}")
             info(f"min beta_pl: {min_bs} max beta_pl: {max_bs}")
+            info(f"Number of iterations: {results['iter_num'].mean()}")
             info(f"Objective function evaluation took {end_time - start_time:.2f} seconds")
             # Add a new axis to the results so it matches the shape of grid search results
             os.makedirs(out_folder, exist_ok=True)
