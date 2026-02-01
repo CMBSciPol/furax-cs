@@ -19,7 +19,8 @@ dependencies = [
   "astropy",
   "optimistix@git+https://github.com/ASKabalan/optimistix@add-progress",
   "cobyqa",
-  "jaxopt"
+  "jaxopt",
+  "scienceplots"
 ]
 description = "CMB component separation comparison: FURAX vs FGBuster"
 license = {file = "LICENSE"}
