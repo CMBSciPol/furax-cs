@@ -105,7 +105,7 @@ snap_id=$(sbatch --dependency=afterany:$deps \
        $SLURM_SCRIPT $OUTPUT_DIR r_analysis snap \
        -r $RUN_PATS \
        -ird $OUTPUT_DIR \
-       -s scipy_tnc \
+       -s optax_lbfgs \
        -o $OUTPUT_DIR/SNAPSHOT_FURAX \
        -mi 2000 \
        -n 64 \
