@@ -108,7 +108,7 @@ def params_to_maps(
     run_data: Mapping[str, Array],
     previous_mask_size: Mapping[str, int],
     noise_selection: str = "min-value",
-) -> tuple[dict[str, Array], dict[str, Array], Mapping[str, int]]:
+) -> tuple[dict[str, Array], dict[str, Array], dict[str, Array], Mapping[str, int]]:
     """Convert per-cluster parameter arrays to HEALPix maps.
 
     Parameters

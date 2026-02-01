@@ -14,7 +14,7 @@ from jaxtyping import Array, Float, Int
 from matplotlib.colors import Normalize
 from tqdm.auto import tqdm
 
-from ..logging_utils import debug, error, hint, info, success, warning
+from ..logging_utils import error, hint, info, success, warning
 from .compute import compute_all
 from .snapshot import load_and_filter_snapshot, serialize_snapshot_payload
 
@@ -34,6 +34,18 @@ RUN_COLORS = [
     "#bcbd22",  # olive
     "#17becf",  # cyan
 ]
+
+font_size = 18
+plt.rcParams.update(
+    {
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "legend.fontsize": font_size,
+        "axes.titlesize": font_size,
+    }
+)
 
 
 def get_run_color(index: int) -> str:
@@ -98,6 +110,7 @@ def set_font_size(size: int) -> None:
     size : int
         Font size to use for all plot elements.
     """
+    return
     font_size = size
     plt.rcParams.update(
         {
@@ -393,12 +406,9 @@ def plot_all_histograms(
                 all_recovered = np.concatenate(recovered_vals)
                 color = get_run_color(i)
 
-                debug(f"shape of all_recovered for {name}, {key}: {all_recovered.shape}")
                 idx_max = np.argmax(all_recovered)
                 idx_max_unraveled = np.unravel_index(idx_max, all_recovered.shape)
-                debug(
-                    f"argmax of param idx_max_unraveled: {idx_max_unraveled} with value {all_recovered[idx_max_unraveled]}"
-                )
+
                 to_bin = all_recovered[:, idx_max_unraveled[1]]
 
                 ax.hist(

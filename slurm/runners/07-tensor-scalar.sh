@@ -1,57 +1,75 @@
 #!/bin/bash
-# Tensor-to-scalar ratio runs (r=0.003, r=0.004)
+# Tensor-to-scalar ratio runs (Redone)
 
 # Collect all job IDs here
 job_ids=()
 BATCH_PARAMS="--account=nih@h100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C h100"
 OUTPUT_DIR="RESULTS/RUNS/TENSOR_TO_SCALAR_34"
 
-# Parameters matching the folder structure in RESULTS/RUNS/TENSOR_TO_SCALAR_34
-# Based on existing folder: kmeans_cr3d1s1_BD10000_TD500_BS500_...
-B_DUST=10000
-T_DUST=500
-B_SYNC=500
+echo "=== Running Tensor-to-Scalar Runs (Redo) ==="
 
-echo "=== Running Tensor-to-Scalar Runs ==="
+# Common Parameters
+NS=10
+NR=0.2
+MASK="ALL"
+SOLVER="active_set_adabelief"
+TOP_K=0.0
+MAX_ITER=2000
+INSTRUMENT="LiteBIRD"
+NSIDE=64
 
-# Loop over sky models: cr3d1s1 (r=0.003) and cr4d1s1 (r=0.004)
-for TAG in cr3d1s1 cr4d1s1; do
-    echo "Submitting jobs for TAG=$TAG"
+submit_job() {
+    local TAG=$1
+    local B_DUST=$2
+    local T_DUST=$3
+    local B_SYNC=$4
     
-    # Loop over masks
-    for MASK in GAL020 GAL040 GAL060; do
-        JOB_NAME="KM_${TAG}_${MASK}"
-        NAME="kmeans_${TAG}_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
+    local JOB_NAME="KM_${TAG}_${B_DUST}"
+    # Construct name to match pattern
+    local NAME="kmeans_${TAG}_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
+    
+    echo "Submitting ${TAG} with ${B_DUST} ${T_DUST} ${B_SYNC}..."
+    
+    jid=$(sbatch $BATCH_PARAMS --job-name=$JOB_NAME \
+        $SLURM_SCRIPT $OUTPUT_DIR \
+        kmeans-model -n $NSIDE -ns $NS -nr $NR \
+        -pc $B_DUST $T_DUST $B_SYNC \
+        -tag $TAG -m $MASK -i $INSTRUMENT \
+        -s $SOLVER -top_k $TOP_K -mi $MAX_ITER \
+        --name $NAME -o $OUTPUT_DIR)
         
-        jid=$(sbatch $BATCH_PARAMS --job-name=$JOB_NAME \
-            $SLURM_SCRIPT $OUTPUT_DIR \
-            kmeans-model -n 64 -ns 10 -nr 1.0 \
-            -pc $B_DUST $T_DUST $B_SYNC \
-            -tag $TAG -m $MASK -i LiteBIRD \
-            -s active_set_adabelief -top_k 0.4 -mi 2000 \
-            --name $NAME -o $OUTPUT_DIR)
-        
-        job_ids+=("$jid")
-    done
-done
+    job_ids+=("$jid")
+}
+
+# 1. cr4d0s0 10 10 10
+submit_job "cr4d0s0" 10 10 10
+
+# 2. c1d0s0 10 10 10
+submit_job "c1d0s0" 10 10 10
+
+# 3. cr4d0s0 30000 1500 1500
+submit_job "cr4d0s0" 30000 1500 1500
+
+# 4. c1d0s0 30000 1500 1500
+submit_job "c1d0s0" 30000 1500 1500
 
 # Dependencies for r_analysis
 deps=$(IFS=:; echo "${job_ids[*]}")
 
-echo "Submitting analysis job..."
+echo "Submitting analysis jobs..."
 
-# Analysis for cr3d1s1
+# Analysis for cr4d0s0
 sbatch --dependency=afterany:$deps \
     $BATCH_PARAMS \
-    --job-name=ANA_TENSOR_3 \
+    --job-name=ANA_CR4 \
     $SLURM_SCRIPT $OUTPUT_DIR \
-    r_analysis snap -r "kmeans_cr3d1s1_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}" -ird $OUTPUT_DIR \
-    -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD
+    r_analysis snap -r "kmeans_cr4d0s0_*" -ird $OUTPUT_DIR \
+    -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o SNAP
 
-# Analysis for cr4d1s1
+# Analysis for c1d0s0
 sbatch --dependency=afterany:$deps \
     $BATCH_PARAMS \
-    --job-name=ANA_TENSOR_4 \
+    --job-name=ANA_C1 \
     $SLURM_SCRIPT $OUTPUT_DIR \
-    r_analysis snap -r "kmeans_cr4d1s1_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}" -ird $OUTPUT_DIR \
-    -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD
+    r_analysis snap -r "kmeans_c1d0s0_*" -ird $OUTPUT_DIR \
+    -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o SNAP

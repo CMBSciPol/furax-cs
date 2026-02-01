@@ -74,6 +74,7 @@ def run_analysis() -> int | None:
             args.max_iterations,
             args.solver,
             noise_selection=args.noise_selection,
+            sky_tag=args.sky,
         )
 
     if args.subcommand == "plot":

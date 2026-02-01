@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import cast
 
 import healpy as hp
@@ -116,7 +117,11 @@ def compute_total_res(
     s_hat_expanded = expand_stokes(s_hat)
     s_hat_arr = np.stack([s_hat_expanded.i, s_hat_expanded.q, s_hat_expanded.u], axis=1)
 
-    res = np.where(s_hat_arr == hp.UNSEEN, hp.UNSEEN, s_hat_arr - s_true[np.newaxis, ...])
+    if fsky >= 0.999 and os.environ.get("FURAX_CS_ALLOW_FULLSKY", "0") == "1":
+        res = s_hat_arr
+    else:
+        res = np.where(s_hat_arr == hp.UNSEEN, hp.UNSEEN, s_hat_arr - s_true[np.newaxis, ...])
+
     cl_list = []
     for i in tqdm(range(res.shape[0]), desc="Computing Residual BB Spectra"):
         cl = cast(Float[Array, " 6 L"], hp.anafast(res[i]))

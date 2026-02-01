@@ -10,10 +10,10 @@ This project specifically focuses on comparing:
 *   **FGBuster**: parametric component separation (standard).
 *   **FURAX**: Adaptive, gradient-based separation with spatially varying spectral parameters.
 
-### Furax ADABK4
+### Furax ADABK
 
 Furax CS is a comprehensive software package designed for Component Separation for the Cosmic Microwave Background (CMB) data analysis.
-The main tool is the minimizer provided under the name of Furax ADABK4 which is an adaptive gradient based optimizer specifically designed to handle extremely noise dominated data such as CMB observations and physical bound constraints.
+The main tool is the minimizer provided under the name of Furax ADABK which is an adaptive gradient based optimizer specifically designed to handle extremely noise dominated data such as CMB observations and physical bound constraints.
 The minimizer is orders of magnitude faster than traditional minimizers such as Scipy-TNC and is able to reach lower minima in fewer iterations.
 
 <p align="center">

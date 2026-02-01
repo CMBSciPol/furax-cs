@@ -461,9 +461,9 @@ def get_solver(
         max_constraints_to_release = kwargs.pop("max_constraints_to_release", None)
         if max_constraints_to_release is None:
             # check int in ADABKN as in ADABK5 for example
-            if solver_name.startswith("ADABK") and len(solver_name) > 6:
+            if solver_name.startswith("ADABK") and len(solver_name) > 5:
                 try:
-                    max_constraints_to_release = int(solver_name[6:]) * 0.1
+                    max_constraints_to_release = int(solver_name[5:]) * 0.1
                 except ValueError:
                     raise ValueError(
                         f"Invalid solver name: {solver_name}. "

@@ -26,7 +26,7 @@ def generate_noise_operator(
     masked_d: Stokes,
     instrument: FGBusterInstrument,
     stokes_type: Optional[Literal["QU", "IQU"]] = None,
-) -> tuple[Stokes, NoiseDiagonalOperator]:
+) -> tuple[Stokes, NoiseDiagonalOperator, Stokes]:
     """Generate noised data and corresponding noise covariance operator.
 
     This function creates a complete noise model for CMB component separation:

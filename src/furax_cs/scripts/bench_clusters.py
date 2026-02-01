@@ -63,30 +63,39 @@ def run_fg_buster(
     mask = jnp.ones_like(d.q[0]).astype(jnp.int64)
 
     (indices,) = jnp.where(mask == 1)
-    max_centroids = cluster_count
+
+    # Split cluster_count into 50% beta_dust, 30% temp_dust, 20% beta_pl
+    n_beta_dust = int(cluster_count * 0.5)
+    n_temp_dust = int(cluster_count * 0.3)
+    n_beta_pl = cluster_count - n_beta_dust - n_temp_dust
+
+    # Ensure at least 1 cluster if possible/needed, though inputs are large
+    n_beta_dust = max(1, n_beta_dust)
+    n_temp_dust = max(1, n_temp_dust)
+    n_beta_pl = max(1, n_beta_pl)
 
     temp_dust_patch_indices = find_kmeans_clusters(
         mask,
         indices,
-        cluster_count,
+        n_temp_dust,
         jax.random.PRNGKey(0),
-        max_centroids=max_centroids,
+        max_centroids=n_temp_dust,
         initial_sample_size=1,
     )
     beta_dust_patch_indices = find_kmeans_clusters(
         mask,
         indices,
-        cluster_count,
+        n_beta_dust,
         jax.random.PRNGKey(1),
-        max_centroids=max_centroids,
+        max_centroids=n_beta_dust,
         initial_sample_size=1,
     )
     beta_pl_patch_indices = find_kmeans_clusters(
         mask,
         indices,
-        cluster_count,
+        n_beta_pl,
         jax.random.PRNGKey(2),
-        max_centroids=max_centroids,
+        max_centroids=n_beta_pl,
         initial_sample_size=1,
     )
     patch_ids_fg = [
@@ -98,7 +107,7 @@ def run_fg_buster(
     components = [CMB(), Dust(dust_nu0), Synchrotron(synchrotron_nu0)]
     freq_maps_fg = jnp.stack([d.q, d.u], axis=1)
 
-    bounds = [(0.0, 5.0), (10.0, 40), (-6.0, 0.0)]
+    bounds = [(0.5, 5.0), (10.0, 40), (-6.0, -1.0)]
     options = {"disp": False, "gtol": tol, "eps": tol, "maxiter": max_iter, "tol": tol}
     method = fgbuster_solver
     instrument = get_instrument("LiteBIRD")
@@ -109,8 +118,6 @@ def run_fg_buster(
     comp_sep = partial(adaptive_comp_sep, bounds=bounds, options=options, method=method, tol=tol)
 
     result = numpy_timer.chrono_jit(comp_sep, components, instrument, freq_maps_fg, patch_ids_fg)
-    for _ in range(2):
-        numpy_timer.chrono_fun(comp_sep, components, instrument, freq_maps_fg, patch_ids_fg)
 
     cmb_q, cmb_u = result.s[0]
 
@@ -136,10 +143,32 @@ def run_jax_minimize(
 
     info(f"Running Furax {solver_name} Comp sep nside={nside} cluster_count={cluster_count}...")
 
+    # Split cluster_count into 50% beta_dust, 30% temp_dust, 20% beta_pl
+    n_beta_dust = int(cluster_count * 0.5)
+    n_temp_dust = int(cluster_count * 0.3)
+    n_beta_pl = cluster_count - n_beta_dust - n_temp_dust
+
+    # Ensure at least 1 cluster
+    n_beta_dust = max(1, n_beta_dust)
+    n_temp_dust = max(1, n_temp_dust)
+    n_beta_pl = max(1, n_beta_pl)
+
     best_params = {
-        "beta_pl": jnp.full((cluster_count,), (-3.0)),
-        "beta_dust": jnp.full((cluster_count,), 1.54),
-        "temp_dust": jnp.full((cluster_count,), 20.0),
+        "beta_pl": jnp.full((n_beta_pl,), (-3.0)),
+        "beta_dust": jnp.full((n_beta_dust,), 1.54),
+        "temp_dust": jnp.full((n_temp_dust,), 20.0),
+    }
+
+    lower_params = {
+        "beta_pl": jnp.full((n_beta_pl,), -6.0),
+        "beta_dust": jnp.full((n_beta_dust,), 0.5),
+        "temp_dust": jnp.full((n_temp_dust,), 10.0),
+    }
+
+    upper_params = {
+        "beta_pl": jnp.full((n_beta_pl,), -1.0),
+        "beta_dust": jnp.full((n_beta_dust,), 5.0),
+        "temp_dust": jnp.full((n_temp_dust,), 40.0),
     }
 
     guess_params = jax.tree.map_with_path(
@@ -152,30 +181,29 @@ def run_jax_minimize(
     mask = jnp.ones_like(d.q[0]).astype(jnp.int64)
 
     (indices,) = jnp.where(mask == 1)
-    max_centroids = cluster_count
 
     temp_dust_patch_indices = find_kmeans_clusters(
         mask,
         indices,
-        cluster_count,
+        n_temp_dust,
         jax.random.PRNGKey(0),
-        max_centroids=max_centroids,
+        max_centroids=n_temp_dust,
         initial_sample_size=1,
     )
     beta_dust_patch_indices = find_kmeans_clusters(
         mask,
         indices,
-        cluster_count,
+        n_beta_dust,
         jax.random.PRNGKey(1),
-        max_centroids=max_centroids,
+        max_centroids=n_beta_dust,
         initial_sample_size=1,
     )
     beta_pl_patch_indices = find_kmeans_clusters(
         mask,
         indices,
-        cluster_count,
+        n_beta_pl,
         jax.random.PRNGKey(2),
-        max_centroids=max_centroids,
+        max_centroids=n_beta_pl,
         initial_sample_size=1,
     )
 
@@ -205,6 +233,8 @@ def run_jax_minimize(
             rtol=tol,
             atol=tol,
             precondition=precondition,
+            lower_bound=lower_params,
+            upper_bound=upper_params,
         )
         return final_params["beta_pl"], final_params
 
@@ -316,12 +346,13 @@ def main():
 
     if not args.plot_only:
         for nside in args.nsides:
-            save_to_cache(nside, sky="c1d1s1", noise_ratio=args.noise)
+            sky = "c1d0s0"
+            save_to_cache(nside, sky=sky, noise_ratio=args.noise)
 
             if args.cache_run:
                 continue
 
-            nu, freq_maps = load_from_cache(nside, sky="c1d1s1", noise_ratio=args.noise)
+            nu, freq_maps = load_from_cache(nside, sky=sky, noise_ratio=args.noise)
 
             for cluster_count in args.clusters:
                 # Solver mode benchmarking

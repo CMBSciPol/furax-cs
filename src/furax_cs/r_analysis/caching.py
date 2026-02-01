@@ -84,7 +84,7 @@ def compute_w(
             "temp_dust": jnp.full((max_count["temp_dust"],), 50.0),
             "beta_pl": jnp.full((max_count["beta_pl"],), -1.0),
         },
-        precondition=False,
+        precondition=True,
         nu=nu,
         N=N,
         d=d,

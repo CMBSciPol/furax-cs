@@ -25,7 +25,7 @@ r_analysis snap \
 # 2. Plot
 r_analysis plot \
     -r $REGEX_MINIMIZE \
-    -t "(This work) ADABK4" "FGBuster TNC" "(This work) L-BFGS" \
+    -t "(This work) ADABK" "FGBuster TNC" "(This work) L-BFGS" \
     -ird $DIR \
     --snapshot PAPER/SNAPPING/SNAP_MINIMIZE \
     --output-format $FORMAT --font-size $FONT \
