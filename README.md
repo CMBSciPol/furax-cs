@@ -46,10 +46,16 @@ pip install jax
 ```
 
 ### 2. Install Package
-Clone the repository and install in editable mode:
+First, install the package from PyPi
 
 ```bash
-pip install furax-cs[all] # or choose specific extras: plotting, benchmarks
+pip install furax-cs
+```
+
+Some packages are not up to date on PyPi, to install the latest development version, install the requirement files after installing furax-cs:
+
+```bash
+pip install -r https://raw.githubusercontent.com/CMBSciPol/furax-cs/main/requirements.txt
 ```
 
 ---
