@@ -7,7 +7,7 @@ authors = [
   {name = "FURAX Team"}
 ]
 dependencies = [
-  "furax@git+https://github.com/CMBSciPol/furax.git@main",
+  "furax",
   "healpy",
   "jax-healpy",
   "jax_hpc_profiler",
@@ -17,12 +17,12 @@ dependencies = [
   "numpy",
   "pysm3",
   "astropy",
-  "optimistix@git+https://github.com/ASKabalan/optimistix@add-progress",
+  "optimistix",
   "cobyqa",
   "jaxopt",
   "scienceplots"
 ]
-description = "CMB component separation comparison: FURAX vs FGBuster"
+description = "GPU Powered CMB Parametric Component Seperation using Furax and JAX"
 license = {file = "LICENSE"}
 name = "furax-cs"
 readme = "README.md"
@@ -31,10 +31,7 @@ version = "0.1.0"
 
 [project.optional-dependencies]
 all = [
-  "furax-cs[plotting,benchmarks,dev]"
-]
-benchmarks = [
-  "fgbuster @ git+https://github.com/fgbuster/fgbuster"
+  "furax-cs[plotting,dev]"
 ]
 dev = [
   "ruff",

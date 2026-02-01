@@ -1,0 +1,2 @@
+furax @ git+https://github.com/CMBSciPol/furax.git@main
+optimistix @ git+https://github.com/ASKabalan/optimistix@add-progress
