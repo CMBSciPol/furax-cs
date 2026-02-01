@@ -24,7 +24,6 @@ from .search_space import (
 )
 
 __all__ = [
-    "generate_maps",
     "get_mixin_matrix_operator",
     "load_cmb_map",
     "load_fg_map",

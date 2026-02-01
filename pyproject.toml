@@ -7,7 +7,7 @@ authors = [
   {name = "FURAX Team"}
 ]
 dependencies = [
-  "furax",
+  "furax@git+https://github.com/CMBSciPol/furax.git@main",
   "healpy",
   "jax-healpy",
   "jax_hpc_profiler",
@@ -60,6 +60,7 @@ r_analysis = "furax_cs.r_analysis.main:main"
 [tool.pyright]
 exclude = ["**/node_modules", "**/__pycache__", ".git"]
 executionEnvironments = [
+  {reportGeneralTypeIssues = "none", root = "src/furax_cs/r_analysis"},
   {root = "src"}
 ]
 include = ["src"]
@@ -68,6 +69,11 @@ pythonVersion = "3.11"
 reportGeneralTypeIssues = false
 reportMissingImports = false
 reportUndefinedVariable = false
+
+[tool.pyright.overrides]
+include = ["matplotlib.*", "seaborn.*"]
+reportGeneralTypeIssues = "none"
+reportUnknownMemberType = "none"
 
 [tool.ruff]
 fix = true

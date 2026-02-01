@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any, Optional, cast, get_args
 
 import equinox as eqx
 import jax
@@ -231,6 +231,10 @@ def minimize(
     final_state : UnifiedState
         Final optimizer state containing best loss, best parameters, iteration count, and solver state.
     """
+    if solver_name not in get_args(SOLVER_NAMES):
+        raise ValueError(f"Invalid solver: {solver_name}")
+
+    solver_name = cast(SOLVER_NAMES, solver_name)
 
     if solver_name in SELFCONDITIONED_SOLVERS and precondition:
         warning(f"Solver '{solver_name}' is self-conditioned; ignoring preconditioning request.")

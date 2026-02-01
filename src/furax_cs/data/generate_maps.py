@@ -5,7 +5,7 @@ import os
 import pickle
 import re
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 
 import camb
 import healpy as hp
@@ -102,12 +102,14 @@ class CMBLensedWithTensors(CMBLensed):
         ell_range_inputs = ells_all[2 : lmax + 1]
         # conv_factor = conversion[2 : lmax + 1]
 
+        # Apply conversion when assigning to spectra
+
         spectra = np.zeros((8, len(ell_range_inputs)))
         spectra[0] = ell_range_inputs
-        spectra[1] = dl_tt  # TT (run_taylens expects Dell)
-        spectra[2] = dl_ee  # EE (run_taylens expects Dell)
-        spectra[3] = dl_bb  # BB (run_taylens expects Dell)
-        spectra[4] = dl_te  # TE (run_taylens expects Dell)
+        spectra[1] = dl_tt
+        spectra[2] = dl_ee
+        spectra[3] = dl_bb
+        spectra[4] = dl_te
         # Note: lens_potential is usually dimensionless or different units,
         # check CAMB docs, but usually they are PP, not D_ell.
         # For safety, assuming standard CAMB output for potentials is usually correct for PySM
@@ -183,7 +185,8 @@ def generate_custom_cmb(
     """
     info(f"generating with r_value {r_value}")
     cmb = CMBLensedWithTensors(nside=nside, r=r_value, cmb_seed=seed)
-    return cmb.map.value  # Returns (3, npix) array in uK_CMB
+    cmb_map = cast(Float[Array, "3 npix"], cmb.map.value)
+    return cmb_map
 
 
 def save_to_cache(
