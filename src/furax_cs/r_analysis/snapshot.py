@@ -248,6 +248,7 @@ def run_snapshot(
     max_iter: int,
     solver_name: str,
     noise_selection: str,
+    sky_tag: str,
 ) -> int:
     """Entry point for 'snap' subcommand.
 
@@ -280,6 +281,7 @@ def run_snapshot(
             max_iter,
             solver_name,
             noise_selection=noise_selection,
+            sky_tag=sky_tag,
         )
         save_snapshot(snapshot_path, computed)
         success(f"Saved {len(computed)} new entries to snapshot at {snapshot_path}")

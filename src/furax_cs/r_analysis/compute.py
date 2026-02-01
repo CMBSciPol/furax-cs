@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from collections import OrderedDict
 from typing import Any, Union
 
@@ -411,8 +412,11 @@ def compute_group(
         info(f"Statistical residuals: min={np.min(cl_stat_res):.2e}, max={np.max(cl_stat_res):.2e}")
 
     cl_total_res = None
+    is_full_sky = f_sky >= 0.999 and os.environ.get("FURAX_CS_ALLOW_FULLSKY", "0") == "1"
+    info(f"Effective f_sky: {f_sky:.4f} (Full sky: {is_full_sky})")
+
     if flags["compute_total"]:
-        if cl_syst_res is not None and cl_stat_res is not None:
+        if not is_full_sky and cl_syst_res is not None and cl_stat_res is not None:
             cl_total_res = cl_syst_res + cl_stat_res
         else:
             cl_total_res, _ = compute_total_res(combined_cmb_recon, s_true, f_sky, ell_range)
@@ -437,7 +441,12 @@ def compute_group(
     )
     cl_bb_obs, cl_bb_r1, cl_bb_lens = None, None, None
     if flags["compute_total"] and flags["needs_r_estimation"] and cl_total_res is not None:
-        stat_res_for_r = cl_stat_res if cl_stat_res is not None else np.zeros_like(ell_range)
+        if is_full_sky:
+            cl_for_r = cl_true
+            noise_for_r = np.zeros_like(ell_range)
+        else:
+            cl_for_r = cl_total_res
+            noise_for_r = cl_stat_res if cl_stat_res is not None else np.zeros_like(ell_range)
         (
             r_best,
             sigma_r_neg,
@@ -448,7 +457,7 @@ def compute_group(
             cl_bb_r1,
             cl_bb_lens,
             cl_bb_obs,
-        ) = estimate_r(cl_total_res, nside, stat_res_for_r, f_sky)
+        ) = estimate_r(cl_for_r, nside, noise_for_r, f_sky, is_cl_obs=is_full_sky)
         info(f"r estimation: {r_best:.4f} +{sigma_r_pos:.4f} -{sigma_r_neg:.4f}")
 
     # Build output pytrees
