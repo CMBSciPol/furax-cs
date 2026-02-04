@@ -117,13 +117,19 @@ def run_fg_buster(
 
     comp_sep = partial(adaptive_comp_sep, bounds=bounds, options=options, method=method, tol=tol)
 
-    result = numpy_timer.chrono_jit(comp_sep, components, instrument, freq_maps_fg, patch_ids_fg)
+    result = numpy_timer.chrono_fun(comp_sep, components, instrument, freq_maps_fg, patch_ids_fg)
 
     cmb_q, cmb_u = result.s[0]
 
     cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, (cmb_q, cmb_u)))
 
-    return result.x, cmb_var, result.fun
+    final_params = {
+        "beta_dust": result.params[0],
+        "temp_dust": result.params[1],
+        "beta_pl": result.params[2],
+    }
+
+    return final_params, cmb_var, result.fun
 
 
 def run_jax_minimize(
@@ -372,10 +378,10 @@ def main():
                         args.fgbuster_solver,
                     )
                     data = {
-                        "final_params": final_params,
                         "cmb_variance": cmb_variance,
                         "last_L": last_L,
                     }
+                    data.update(**final_params)
                     kwargs = {
                         "function": f"FGBuster-{args.fgbuster_solver} n={nside}",
                         "precision": "float64",
@@ -400,10 +406,10 @@ def main():
                         args.precondition,
                     )
                     data = {
-                        "final_params": final_params,
                         "cmb_variance": cmb_variance,
                         "last_L": last_L,
                     }
+                    data.update(**final_params)
                     kwargs = {
                         "function": f"Furax-{args.jax_solver} n={nside}",
                         "precision": "float64",
