@@ -1,0 +1,10 @@
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 0
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 10
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 20
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 30
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 40
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 50
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 60
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 70
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 80
+bash /lustre/fswork/projects/rech/tkc/commun/CMB/furax-cs/slurm/runners/06-validate_fg.sh 90

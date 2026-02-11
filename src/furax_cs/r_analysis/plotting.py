@@ -12,6 +12,7 @@ from furax._instruments.sky import FGBusterInstrument
 from furax.obs.stokes import Stokes
 from jaxtyping import Array, Float, Int
 from matplotlib.colors import Normalize
+from matplotlib.lines import Line2D
 from tqdm.auto import tqdm
 
 from ..logging_utils import error, hint, info, success, warning
@@ -35,7 +36,7 @@ RUN_COLORS = [
     "#17becf",  # cyan
 ]
 
-font_size = 18
+font_size = 22
 plt.rcParams.update(
     {
         "font.size": font_size,
@@ -44,6 +45,7 @@ plt.rcParams.update(
         "ytick.labelsize": font_size,
         "legend.fontsize": font_size,
         "axes.titlesize": font_size,
+        "text.usetex": True,  # Use LaTeX for rendering text
     }
 )
 
@@ -61,6 +63,7 @@ def get_run_color(index: int) -> str:
     str
         Hex color string
     """
+    index += 6
     return RUN_COLORS[index % len(RUN_COLORS)]
 
 
@@ -198,6 +201,7 @@ def plot_params(
             sub=(subplot_args[0], subplot_args[1], subplot_args[2](i)),
             bgcolor=(0.0,) * 4,
             cbar=True,
+            format="%.4f",
         )
 
     save_or_show(f"params_{name}", output_format, output_dir=output_dir, subfolder=subfolder)
@@ -275,6 +279,7 @@ def plot_all_params_residuals(
     true_params: dict[str, Float[Array, " npix"]],
     output_format: str,
     output_dir: str = "plots",
+    show_true_param: bool = False,
 ) -> None:
     """Generate the maps and residuals plot for all parameters across all runs."""
 
@@ -285,57 +290,74 @@ def plot_all_params_residuals(
     ]
 
     nb_runs = len(names)
+    offset = 1 if show_true_param else 0
+    total_rows = nb_runs + offset
 
-    for config in param_configs:
-        key = config["key"]
-        label = config["label"]
+    _font_size = font_size - 6
+    rc_overrides = {
+        "font.size": _font_size,
+        "axes.labelsize": _font_size,
+        "xtick.labelsize": _font_size,
+        "ytick.labelsize": _font_size,
+        "legend.fontsize": _font_size,
+        "axes.titlesize": _font_size,
+    }
+    with plt.rc_context(rc_overrides):
+        for config in param_configs:
+            key = config["key"]
+            label = config["label"]
 
-        if key not in true_params:
-            warning(f"Missing data for {key} in true params. Skipping.")
-            continue
-
-        fig = plt.figure(figsize=(12, 4 + 4 * nb_runs))
-        gs = plt.GridSpec(nb_runs + 1, 2, hspace=0.3, wspace=0.1, height_ratios=[1] + [1] * nb_runs)
-
-        # 1. TRUTH (Row 0)
-        ax_true = fig.add_subplot(gs[0, :])
-        plt.sca(ax_true)
-        hp.mollview(true_params[key], title=f"True Parameters {label}", hold=True, bgcolor=(0,) * 4)
-
-        for i, (name, params_map) in enumerate(zip(names, params_map_list)):
-            if params_map is None or key not in params_map:
+            if key not in true_params:
+                warning(f"Missing data for {key} in true params. Skipping.")
                 continue
 
-            # Calculate residual
-            res = get_masked_residual(true_params[key], params_map[key])
+            fig = plt.figure(figsize=(12, 4 * total_rows))
+            gs = plt.GridSpec(total_rows, 2, hspace=0.3, wspace=0.1, height_ratios=[1] * total_rows)
 
-            # Plot Parameter Map (Left Column)
-            ax_map = fig.add_subplot(gs[i + 1, 0])
-            plt.sca(ax_map)
-            hp.mollview(
-                params_map[key],
-                title=f"{name} {label}",
-                hold=True,
-                bgcolor=(0,) * 4,
+            if show_true_param:
+                # 1. TRUTH (Row 0)
+                ax_true = fig.add_subplot(gs[0, :])
+                plt.sca(ax_true)
+                hp.mollview(
+                    true_params[key], title=f"True Parameters {label}", hold=True, bgcolor=(0,) * 4
+                )
+
+            for i, (name, params_map) in enumerate(zip(names, params_map_list)):
+                if params_map is None or key not in params_map:
+                    continue
+
+                # Calculate residual
+                res = get_masked_residual(true_params[key], params_map[key])
+
+                # Plot Parameter Map (Left Column)
+                ax_map = fig.add_subplot(gs[i + offset, 0])
+                plt.sca(ax_map)
+                hp.mollview(
+                    params_map[key],
+                    title=f"{name} {label}",
+                    hold=True,
+                    bgcolor=(0,) * 4,
+                    format="%.4f",
+                )
+
+                # Plot Residual (Right Column)
+                ax_res = fig.add_subplot(gs[i + offset, 1])
+                plt.sca(ax_res)
+                hp.mollview(
+                    res,
+                    title=f"Residual (True - {name})",
+                    cmap="RdBu_r",
+                    hold=True,
+                    bgcolor=(0,) * 4,
+                    format="%.4f",
+                )
+
+            name_str = "_".join(names)
+            save_or_show(
+                f"minimize_maps_residuals_{key}_{name_str}",
+                output_format,
+                output_dir=output_dir,
             )
-
-            # Plot Residual (Right Column)
-            ax_res = fig.add_subplot(gs[i + 1, 1])
-            plt.sca(ax_res)
-            hp.mollview(
-                res,
-                title=f"Residual (True - {name})",
-                cmap="RdBu_r",
-                hold=True,
-                bgcolor=(0,) * 4,
-            )
-
-        name_str = "_".join(names)
-        save_or_show(
-            f"minimize_maps_residuals_{key}_{name_str}",
-            output_format,
-            output_dir=output_dir,
-        )
 
 
 def plot_all_histograms(
@@ -403,7 +425,7 @@ def plot_all_histograms(
                     recovered_vals.append(val)
 
             if recovered_vals:
-                all_recovered = np.concatenate(recovered_vals)
+                all_recovered = np.concatenate(recovered_vals, axis=1)
                 color = get_run_color(i)
 
                 idx_max = np.argmax(all_recovered)
@@ -570,80 +592,98 @@ def plot_all_cl_residuals(
     output_format: str,
     output_dir: str = "plots",
 ) -> None:
-    """Overlay residual BB spectra for all requested configurations."""
-    _ = plt.figure(figsize=(10, 8))
+    """Overlay residual BB spectra with a simple legend for line styles only."""
 
-    if len(cl_pytree_list) == 0:
-        warning("No power spectra results to plot")
-        return
+    # Context for font sizes (keeping legend smaller as requested)
+    rc_overrides = {
+        "legend.fontsize": font_size * 0.8,
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "axes.labelsize": font_size,
+    }
 
-    cl_bb_r1 = cl_pytree_list[0]["cl_bb_r1"]
-    ell_range = cl_pytree_list[0]["ell_range"]
-    cl_bb_lens = cl_pytree_list[0]["cl_bb_lens"]
+    with plt.rc_context(rc_overrides):
+        plt.figure(figsize=(10, 8))
 
-    r_lo, r_hi = 1e-3, 4e-3
-    plt.fill_between(
-        ell_range,
-        r_lo * cl_bb_r1,
-        r_hi * cl_bb_r1,
-        color="grey",
-        alpha=0.35,
-        label=r"$C_\ell^{BB},\; r\in[10^{-3},\,4\cdot10^{-3}]$",
-    )
+        if len(cl_pytree_list) == 0:
+            warning("No power spectra results to plot")
+            return
 
-    plt.plot(
-        ell_range,
-        cl_bb_lens,
-        label=r"$C_\ell^{BB}\,\mathrm{lens}$",
-        color="grey",
-        linestyle="-",
-        linewidth=2,
-    )
+        # --- 1. Plot Background (No labels, handled in caption) ---
+        cl_bb_r1 = cl_pytree_list[0]["cl_bb_r1"]
+        ell_range = cl_pytree_list[0]["ell_range"]
+        cl_bb_lens = cl_pytree_list[0]["cl_bb_lens"]
 
-    for i, (name, cl_pytree) in enumerate(zip(names, cl_pytree_list)):
-        color = get_run_color(i)
-        linewidth = 1.5
+        r_lo, r_hi = 1e-3, 4e-3
+        plt.fill_between(
+            ell_range,
+            r_lo * cl_bb_r1,
+            r_hi * cl_bb_r1,
+            color="grey",
+            alpha=0.35,
+            label=r"$C_\ell^{BB},\; r\in[10^{-3},\,4\cdot10^{-3}]$",
+        )
 
-        if cl_pytree["cl_total_res"] is not None:
-            plt.plot(
-                ell_range,
-                cl_pytree["cl_total_res"],
-                label=rf"{name} $C_\ell^{{\mathrm{{res}}}}$",
-                color=color,
-                linestyle="--",
-            )
-        if cl_pytree["cl_syst_res"] is not None:
-            plt.plot(
-                ell_range,
-                cl_pytree["cl_syst_res"],
-                label=rf"{name} $C_\ell^{{\mathrm{{syst}}}}$",
-                color=color,
-                linestyle="-",
-                linewidth=linewidth,
-            )
-        if cl_pytree["cl_stat_res"] is not None:
-            plt.plot(
-                ell_range,
-                cl_pytree["cl_stat_res"],
-                label=rf"{name} $C_\ell^{{\mathrm{{stat}}}}$",
-                color=color,
-                linestyle=":",
-                linewidth=linewidth,
-            )
+        plt.plot(
+            ell_range,
+            cl_bb_lens,
+            color="grey",
+            linestyle="-",
+            linewidth=2,
+            label=r"$C_\ell^{BB}\,\mathrm{lens}$",
+        )
 
-    plt.title(None)
-    plt.xlabel(r"Multipole $\ell$")
-    plt.ylabel(r"$C_\ell^{BB}$ [$\mu K^2$]")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.grid(True, which="both", ls="--", alpha=0.4)
+        # --- 2. Plot Data (No labels, colors defined by index) ---
+        for i, (name, cl_pytree) in enumerate(zip(names, cl_pytree_list)):
+            color = get_run_color(i)
+            linewidth = 1.5
 
-    plt.legend(loc="best", ncol=2, framealpha=0.95, columnspacing=1.0)
+            if cl_pytree["cl_total_res"] is not None:
+                plt.plot(
+                    ell_range, cl_pytree["cl_total_res"], color=color, linestyle="--", label=None
+                )
+            if cl_pytree["cl_syst_res"] is not None:
+                plt.plot(
+                    ell_range,
+                    cl_pytree["cl_syst_res"],
+                    color=color,
+                    linestyle="-",
+                    linewidth=linewidth,
+                    label=None,
+                )
+            if cl_pytree["cl_stat_res"] is not None:
+                plt.plot(
+                    ell_range,
+                    cl_pytree["cl_stat_res"],
+                    color=color,
+                    linestyle=":",
+                    linewidth=linewidth,
+                    label=None,
+                )
 
-    plt.tight_layout()
+        # --- 3. Create Simplified Legend (Styles Only) ---
+        # We plot invisible lines just to create the legend entries
+        plt.plot([], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)")
+        plt.plot(
+            [], [], color="black", linestyle="-", label=r"Systematic ($C_\ell^{\mathrm{syst}}$)"
+        )
+        plt.plot(
+            [], [], color="black", linestyle=":", label=r"Statistical ($C_\ell^{\mathrm{stat}}$)"
+        )
 
-    name_str = "_".join(names)
-    save_or_show(f"bb_spectra_{name_str}", output_format, output_dir=output_dir)
+        # --- 4. Final Formatting ---
+        plt.title(None)
+        plt.xlabel(r"Multipole $\ell$")
+        plt.ylabel(r"$C_\ell^{BB}$ [$\mu K^2$]")
+        plt.xscale("log")
+        plt.yscale("log")
+        plt.grid(True, which="both", ls="--", alpha=0.4)
+
+        plt.legend(loc="best", framealpha=0.95)
+        plt.tight_layout()
+
+        name_str = "_".join(names)
+        save_or_show(f"bb_spectra_{name_str}", output_format, output_dir=output_dir)
 
 
 def plot_all_systematic_residuals(
@@ -653,51 +693,64 @@ def plot_all_systematic_residuals(
     output_dir: str = "plots",
 ) -> None:
     """Plot systematic residual Q/U maps for multiple runs."""
-    nb_runs = len(syst_map_list)
-    if nb_runs == 0:
-        warning("No systematic residual maps available to plot")
-        return
 
-    # Collect all Q and U maps for shared color limits
-    all_maps = []
-    processed_maps = []
-    for syst_map in syst_map_list:
-        syst_q = np.where(syst_map[1] == hp.UNSEEN, np.nan, syst_map[1])
-        syst_u = np.where(syst_map[2] == hp.UNSEEN, np.nan, syst_map[2])
-        all_maps.extend([syst_q, syst_u])
-        processed_maps.append((syst_q, syst_u))
+    _font_size = font_size - 6
+    rc_overrides = {
+        "font.size": _font_size,
+        "axes.labelsize": _font_size,
+        "xtick.labelsize": _font_size,
+        "ytick.labelsize": _font_size,
+        "legend.fontsize": _font_size,
+        "axes.titlesize": _font_size,
+    }
+    with plt.rc_context(rc_overrides):
+        nb_runs = len(syst_map_list)
+        if nb_runs == 0:
+            warning("No systematic residual maps available to plot")
+            return
 
-    vmin, vmax = get_symmetric_percentile_limits(all_maps)
+        # Collect all Q and U maps for shared color limits
+        all_maps = []
+        processed_maps = []
+        for syst_map in syst_map_list:
+            syst_q = np.where(syst_map[1] == hp.UNSEEN, np.nan, syst_map[1])
+            syst_u = np.where(syst_map[2] == hp.UNSEEN, np.nan, syst_map[2])
+            all_maps.extend([syst_q, syst_u])
+            processed_maps.append((syst_q, syst_u))
 
-    plt.figure(figsize=(12, 4 * nb_runs))
+        vmin, vmax = get_symmetric_percentile_limits(all_maps)
 
-    for i, (name, (syst_q, syst_u)) in enumerate(zip(names, processed_maps)):
-        hp.mollview(
-            syst_q,
-            title=rf"Systematic Residual (Q) - {name} ($\mu$K)",
-            sub=(nb_runs, 2, 2 * i + 1),
-            min=vmin,
-            max=vmax,
-            cmap="RdBu_r",
-            bgcolor=(0,) * 4,
-            cbar=True,
-            notext=True,
-        )
+        plt.figure(figsize=(12, 4 * nb_runs))
 
-        hp.mollview(
-            syst_u,
-            title=rf"Systematic Residual (U) - {name} ($\mu$K)",
-            sub=(nb_runs, 2, 2 * i + 2),
-            min=vmin,
-            max=vmax,
-            cmap="RdBu_r",
-            bgcolor=(0,) * 4,
-            cbar=True,
-            notext=True,
-        )
+        for i, (name, (syst_q, syst_u)) in enumerate(zip(names, processed_maps)):
+            hp.mollview(
+                syst_q,
+                title=rf"Systematic Residual (Q) - {name} ($\mu$K)",
+                sub=(nb_runs, 2, 2 * i + 1),
+                min=vmin,
+                max=vmax,
+                cmap="RdBu_r",
+                bgcolor=(0,) * 4,
+                cbar=True,
+                notext=True,
+                format="%.4f",
+            )
 
-    name_str = "_".join(names)
-    save_or_show(f"all_systematic_residuals_{name_str}", output_format, output_dir=output_dir)
+            hp.mollview(
+                syst_u,
+                title=rf"Systematic Residual (U) - {name} ($\mu$K)",
+                sub=(nb_runs, 2, 2 * i + 2),
+                min=vmin,
+                max=vmax,
+                cmap="RdBu_r",
+                bgcolor=(0,) * 4,
+                cbar=True,
+                notext=True,
+                format="%.4f",
+            )
+
+        name_str = "_".join(names)
+        save_or_show(f"all_systematic_residuals_{name_str}", output_format, output_dir=output_dir)
 
 
 def plot_all_statistical_residuals(
@@ -707,52 +760,65 @@ def plot_all_statistical_residuals(
     output_dir: str = "plots",
 ) -> None:
     """Plot statistical residual Q/U maps for multiple runs."""
-    nb_runs = len(stat_map_list)
-    if nb_runs == 0:
-        warning("No statistical residual maps available to plot")
-        return
 
-    # Collect all Q and U maps for shared color limits
-    all_maps = []
-    processed_maps = []
-    for stat_maps in stat_map_list:
-        stat_map_first = stat_maps[0]
-        stat_q = np.where(stat_map_first[1] == hp.UNSEEN, np.nan, stat_map_first[1])
-        stat_u = np.where(stat_map_first[2] == hp.UNSEEN, np.nan, stat_map_first[2])
-        all_maps.extend([stat_q, stat_u])
-        processed_maps.append((stat_q, stat_u))
+    _font_size = font_size - 6
+    rc_overrides = {
+        "font.size": _font_size,
+        "axes.labelsize": _font_size,
+        "xtick.labelsize": _font_size,
+        "ytick.labelsize": _font_size,
+        "legend.fontsize": _font_size,
+        "axes.titlesize": _font_size,
+    }
+    with plt.rc_context(rc_overrides):
+        nb_runs = len(stat_map_list)
+        if nb_runs == 0:
+            warning("No statistical residual maps available to plot")
+            return
 
-    vmin, vmax = get_symmetric_percentile_limits(all_maps)
+        # Collect all Q and U maps for shared color limits
+        all_maps = []
+        processed_maps = []
+        for stat_maps in stat_map_list:
+            stat_map_first = stat_maps[0]
+            stat_q = np.where(stat_map_first[1] == hp.UNSEEN, np.nan, stat_map_first[1])
+            stat_u = np.where(stat_map_first[2] == hp.UNSEEN, np.nan, stat_map_first[2])
+            all_maps.extend([stat_q, stat_u])
+            processed_maps.append((stat_q, stat_u))
 
-    plt.figure(figsize=(12, 4 * nb_runs))
+        vmin, vmax = get_symmetric_percentile_limits(all_maps)
 
-    for i, (name, (stat_q, stat_u)) in enumerate(zip(names, processed_maps)):
-        hp.mollview(
-            stat_q,
-            title=rf"Statistical Residual (Q) - {name} ($\mu$K)",
-            sub=(nb_runs, 2, 2 * i + 1),
-            min=vmin,
-            max=vmax,
-            cmap="RdBu_r",
-            bgcolor=(0,) * 4,
-            cbar=True,
-            notext=True,
-        )
+        plt.figure(figsize=(12, 4 * nb_runs))
 
-        hp.mollview(
-            stat_u,
-            title=rf"Statistical Residual (U) - {name} ($\mu$K)",
-            sub=(nb_runs, 2, 2 * i + 2),
-            min=vmin,
-            max=vmax,
-            cmap="RdBu_r",
-            bgcolor=(0,) * 4,
-            cbar=True,
-            notext=True,
-        )
+        for i, (name, (stat_q, stat_u)) in enumerate(zip(names, processed_maps)):
+            hp.mollview(
+                stat_q,
+                title=rf"Statistical Residual (Q) - {name} ($\mu$K)",
+                sub=(nb_runs, 2, 2 * i + 1),
+                min=vmin,
+                max=vmax,
+                cmap="RdBu_r",
+                bgcolor=(0,) * 4,
+                cbar=True,
+                notext=True,
+                format="%.4f",
+            )
 
-    name_str = "_".join(names)
-    save_or_show(f"all_statistical_residuals_{name_str}", output_format, output_dir=output_dir)
+            hp.mollview(
+                stat_u,
+                title=rf"Statistical Residual (U) - {name} ($\mu$K)",
+                sub=(nb_runs, 2, 2 * i + 2),
+                min=vmin,
+                max=vmax,
+                cmap="RdBu_r",
+                bgcolor=(0,) * 4,
+                cbar=True,
+                notext=True,
+                format="%.4f",
+            )
+
+        name_str = "_".join(names)
+        save_or_show(f"all_statistical_residuals_{name_str}", output_format, output_dir=output_dir)
 
 
 def plot_all_r_estimation(
@@ -762,57 +828,67 @@ def plot_all_r_estimation(
     output_dir: str = "plots",
 ) -> None:
     """Compare r likelihood curves across runs in a single figure."""
-    plt.figure(figsize=(6, 5))
 
-    for i, (name, r_data) in enumerate(zip(names, r_pytree_list)):
-        if r_data["r_best"] is None:
-            warning(f"No r estimation for {name}, skipping plot.")
-            continue
+    rc_overrides = {
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "legend.fontsize": font_size * 0.7,
+        "axes.titlesize": font_size,
+    }
 
-        r_grid = r_data["r_grid"]
-        L_vals = r_data["L_vals"]
-        r_best = r_data["r_best"]
-        sigma_r_neg = r_data["sigma_r_neg"]
-        sigma_r_pos = r_data["sigma_r_pos"]
+    with plt.rc_context(rc_overrides):
+        plt.figure(figsize=(10, 8))
+        for i, (name, r_data) in enumerate(zip(names, r_pytree_list)):
+            if r_data["r_best"] is None:
+                warning(f"No r estimation for {name}, skipping plot.")
+                continue
 
-        color = get_run_color(i)
-        likelihood = L_vals / L_vals.max()
+            r_grid = r_data["r_grid"]
+            L_vals = r_data["L_vals"]
+            r_best = r_data["r_best"]
+            sigma_r_neg = r_data["sigma_r_neg"]
+            sigma_r_pos = r_data["sigma_r_pos"]
 
-        plt.plot(
-            r_grid,
-            likelihood,
-            label=rf"{name} $\hat{{r}} = {r_best:.2e}^{{+{sigma_r_pos:.1e}}}_{{-{sigma_r_neg:.1e}}}$",
-            color=color,
-        )
+            color = get_run_color(i)
+            likelihood = L_vals / L_vals.max()
 
-        plt.fill_between(
-            r_grid,
-            0,
-            likelihood,
-            where=(r_grid > r_best - sigma_r_neg) & (r_grid < r_best + sigma_r_pos),
-            color=color,
-            alpha=0.2,
-        )
+            plt.plot(
+                r_grid,
+                likelihood,
+                label=rf"$\hat{{r}} = {r_best:.2e}^{{+{sigma_r_pos:.1e}}}_{{-{sigma_r_neg:.1e}}}$",
+                color=color,
+            )
 
-        plt.axvline(
-            x=r_best,
-            color=color,
-            linestyle="--",
-            alpha=0.7,
-        )
+            plt.fill_between(
+                r_grid,
+                0,
+                likelihood,
+                where=(r_grid > r_best - sigma_r_neg) & (r_grid < r_best + sigma_r_pos),
+                color=color,
+                alpha=0.2,
+            )
 
-    plt.axvline(x=0.0, color="black", linestyle="--", alpha=0.7, label="True r=0")
+            plt.axvline(
+                x=r_best,
+                color=color,
+                linestyle="--",
+                alpha=0.7,
+            )
 
-    plt.title("Estimated $r$ residuals")
-    plt.xlabel(r"$r$")
-    plt.ylabel("Relative Likelihood")
-    plt.grid(True, which="both", ls=":")
+        plt.axvline(x=0.0, color="black", linestyle="--", alpha=0.7, label="True r=0")
 
-    plt.legend(loc="upper right", frameon=True, framealpha=0.95, fontsize=10)
-    plt.tight_layout()
+        # plt.title("Estimated $r$ residuals")
+        plt.xlabel(r"$r$")
+        plt.ylabel("Relative Likelihood")
+        plt.grid(True, which="both", ls=":")
 
-    name_str = "_".join(names)
-    save_or_show(f"r_likelihood_{name_str}", output_format, output_dir=output_dir)
+        plt.legend(loc="upper right", frameon=True, framealpha=0.95)
+        plt.tight_layout()
+
+        name_str = "_".join(names)
+        save_or_show(f"r_likelihood_{name_str}", output_format, output_dir=output_dir)
 
 
 def _create_r_vs_clusters_plot(
@@ -912,9 +988,8 @@ def _create_r_vs_clusters_plot(
             linewidths=1.5,
             zorder=3,
         )
-        min_label = (
-            r"Lowest residual $r+\sigma(r)$ at " f"{int(min_clusters)} clusters: {min_value:.2e}"
-        )
+        min_label = r"Lowest residual $r+\sigma(r)$"
+        info(f"Lowest $r+\\sigma(r)$ at {min_value:.2e} for {min_clusters} clusters ({patch_key})")
     else:
         scatter_min = None
         min_label = None
@@ -927,13 +1002,13 @@ def _create_r_vs_clusters_plot(
 
     plt.xlabel(f"Number of Clusters ({patch_name})")
     plt.ylabel(r"Residual $r + \sigma(r)$")
-    plt.title(r"Residual $r + \sigma(r)$ vs. Number of Clusters" + f" ({patch_name})")
+    # plt.title(r"Residual $r + \sigma(r)$ vs. Number of Clusters" + f" ({patch_name})")
     # plt.ylim(-0.001, 0.01)
     plt.axhline(y=0.0, color="black", linestyle="--", alpha=0.7, linewidth=1)
     plt.grid(True, linestyle="--", alpha=0.6)
 
     if legend_handles:
-        plt.legend(legend_handles, legend_labels)
+        plt.legend(legend_handles, legend_labels, frameon=True, framealpha=0.9)
 
     plt.tight_layout()
 
@@ -1056,10 +1131,19 @@ def plot_variance_vs_clusters(
         ("Total", "total"),
     ]
 
-    for patch_name, patch_key in patch_configs:
-        _create_variance_vs_clusters_plot(
-            patch_name, patch_key, names, cmb_pytree_list, output_format, output_dir=output_dir
-        )
+    rc_overrides = {
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "legend.fontsize": font_size * 0.8,
+    }
+
+    with plt.rc_context(rc_overrides):
+        for patch_name, patch_key in patch_configs:
+            _create_variance_vs_clusters_plot(
+                patch_name, patch_key, names, cmb_pytree_list, output_format, output_dir=output_dir
+            )
 
 
 def _create_variance_vs_r_plot(
@@ -1067,17 +1151,19 @@ def _create_variance_vs_r_plot(
     patch_key: str,
     names: list[str],
     cmb_pytree_list: list[dict[str, Any]],
-    r_pytree_list: list[dict[str, Array]],
+    r_pytree_list: list[dict[str, Any]],
     output_format: str,
     output_dir: str = "plots",
+    overlap_threshold: float = 0.02,
 ) -> None:
     """Helper to plot variance vs best-fit r for a given parameter/totals."""
     points = []
     is_total = patch_key == "total"
 
+    # --- 1. Data Collection ---
     for name, cmb_pytree, r_data in zip(names, cmb_pytree_list, r_pytree_list):
         if r_data["r_best"] is None:
-            warning(f"No r estimation for {name}, skipping variance_vs_r point.")
+            # warning(f"No r estimation for {name}, skipping variance_vs_r point.")
             continue
 
         patches = cmb_pytree["patches_map"]
@@ -1116,15 +1202,14 @@ def _create_variance_vs_r_plot(
         )
 
     if len(points) == 0:
-        warning("No valid data points for variance_vs_r plot.")
+        # warning("No valid data points for variance_vs_r plot.")
         return
 
     points.sort(key=lambda p: p[0])
-    variances = [p[0] for p in points]
-    r_values = [p[1] for p in points]
+    variances = np.array([p[0] for p in points])
+    r_values = np.array([p[1] for p in points])
     k_values = np.array([p[2] for p in points])
-    sigma_r_neg = [p[3] for p in points]
-    sigma_r_pos = [p[4] for p in points]
+    sigma_r_pos = np.array([p[4] for p in points])
     cluster_breakdowns = [p[5] for p in points]
 
     plt.figure(figsize=(8, 6))
@@ -1133,27 +1218,113 @@ def _create_variance_vs_r_plot(
     norm = Normalize(vmin=k_values.min(), vmax=k_values.max())
     colors = cmap(norm(k_values))
 
-    for i in range(len(variances)):
-        plt.errorbar(
-            variances[i],
-            r_values[i],
-            yerr=[[sigma_r_neg[i]], [sigma_r_pos[i]]],
-            fmt="o",
-            color=colors[i],
-            markeredgecolor="black",
-            markeredgewidth=0.8,
-            markersize=8,
-            capsize=3,
-            elinewidth=1.5,
-        )
+    # --- 2. Overlap Handling ---
+    # We define the "upper bound" as r + sigma
+    y_upper_values = r_values + sigma_r_pos
 
+    # Calculate ranges for normalization in distance check
+    var_span = np.ptp(variances)
+    y_span = np.ptp(y_upper_values)
+
+    if var_span == 0:
+        var_span = 1.0
+    if y_span == 0:
+        y_span = 1.0
+
+    plotted_indices = []
+
+    # Prepare lists for batch plotting
+    xs, y_means, y_uppers, c_vals = [], [], [], []
+
+    for i in range(len(variances)):
+        # Check overlap using the Upper Bound (Main Visual)
+        is_close = False
+        x_curr = variances[i]
+        y_curr = y_upper_values[i]
+
+        for idx in plotted_indices:
+            x_prev = variances[idx]
+            y_prev = y_upper_values[idx]
+
+            dist = np.sqrt(((x_curr - x_prev) / var_span) ** 2 + ((y_curr - y_prev) / y_span) ** 2)
+            if dist < overlap_threshold:
+                is_close = True
+                break
+
+        if is_close:
+            continue
+
+        plotted_indices.append(i)
+
+        # Collect data
+        xs.append(variances[i])
+        y_means.append(r_values[i])
+        y_uppers.append(y_upper_values[i])
+        c_vals.append(colors[i])
+
+    # Convert to arrays for easier plotting
+    xs = np.array(xs)
+    y_means = np.array(y_means)
+    y_uppers = np.array(y_uppers)
+    c_vals = np.array(c_vals)
+
+    # --- 3. The "Anchor and Buoy" Plotting Strategy (Modified) ---
+
+    # A. Draw Mean r (The Anchor) - Hollow Circles
+    # facecolors='none' makes them hollow
+    plt.scatter(
+        xs, y_means, facecolors="none", edgecolors=c_vals, s=80, linewidth=1, alpha=0.6, zorder=2
+    )
+
+    # B. Draw Upper Bound (The Buoy/Hero) - Solid Circles with Black Edge
+    _ = plt.scatter(
+        xs,
+        y_uppers,
+        c=c_vals,
+        s=80,
+        edgecolors="black",  # Critical for contrast against white background
+        linewidth=0.5,
+        alpha=0.7,
+        zorder=3,
+    )
+
+    # --- 4. Custom Legend ---
+    legend_elements = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="$r$ residual",
+            markerfacecolor="none",
+            markeredgecolor="black",
+            markersize=8,
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="CI Upper Bound",
+            markerfacecolor="black",
+            markeredgecolor="black",
+            markersize=8,
+        ),
+    ]
+    plt.legend(
+        handles=legend_elements, loc="upper right", frameon=True, framealpha=0.9, fancybox=True
+    )
+
+    # --- 5. Colorbar and Labels ---
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = plt.colorbar(sm, ax=plt.gca())
+
     if is_total:
         cbar.set_label("Total Number of Clusters")
-        var_indx = 0
+        # Recalculate best run stats (optional logic for logging)
         r_plus_sigma = np.array(r_values) + np.array(sigma_r_pos)
+        var_indx = 0
         r_indx = np.argmin(r_plus_sigma)
 
         info(
@@ -1177,7 +1348,7 @@ def _create_variance_vs_r_plot(
     plt.xlabel(r"Minimum Variance (Q + U)")
     plt.ylabel(r"Residual $r$")
     plt.ylim(-0.0005, 0.005)
-    plt.title(f"Variance vs Residual $r$ ({patch_name})")
+    # plt.title(f"Variance vs Residual $r$ ({patch_name})")
     plt.axhline(y=0.0, color="black", linestyle="--", alpha=0.7, linewidth=1)
     plt.grid(True, linestyle="--", alpha=0.6)
     plt.tight_layout()
@@ -1202,16 +1373,26 @@ def plot_variance_vs_r(
         ("Total", "total"),
     ]
 
-    for patch_name, patch_key in patch_configs:
-        _create_variance_vs_r_plot(
-            patch_name,
-            patch_key,
-            names,
-            cmb_pytree_list,
-            r_pytree_list,
-            output_format,
-            output_dir=output_dir,
-        )
+    rc_overrides = {
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "legend.fontsize": font_size * 0.9,
+        "axes.titlesize": font_size,
+    }
+
+    with plt.rc_context(rc_overrides):
+        for patch_name, patch_key in patch_configs:
+            _create_variance_vs_r_plot(
+                patch_name,
+                patch_key,
+                names,
+                cmb_pytree_list,
+                r_pytree_list,
+                output_format,
+                output_dir=output_dir,
+            )
 
 
 def plot_r_vs_clusters(
@@ -1222,23 +1403,34 @@ def plot_r_vs_clusters(
     output_dir: str = "plots",
 ) -> None:
     """Plot r + σ(r) vs number of clusters for each parameter."""
-    patch_configs = [
-        (r"$\beta_d$", "beta_dust_patches"),
-        (r"$T_d$", "temp_dust_patches"),
-        (r"$\beta_s$", "beta_pl_patches"),
-        ("Total", "total"),
-    ]
 
-    for patch_name, patch_key in patch_configs:
-        _create_r_vs_clusters_plot(
-            patch_name,
-            patch_key,
-            names,
-            cmb_pytree_list,
-            r_pytree_list,
-            output_format,
-            output_dir=output_dir,
-        )
+    rc_overrides = {
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "legend.fontsize": font_size * 0.7,
+        "axes.titlesize": font_size,
+    }
+
+    with plt.rc_context(rc_overrides):
+        patch_configs = [
+            (r"$\beta_d$", "beta_dust_patches"),
+            (r"$T_d$", "temp_dust_patches"),
+            (r"$\beta_s$", "beta_pl_patches"),
+            ("Total", "total"),
+        ]
+
+        for patch_name, patch_key in patch_configs:
+            _create_r_vs_clusters_plot(
+                patch_name,
+                patch_key,
+                names,
+                cmb_pytree_list,
+                r_pytree_list,
+                output_format,
+                output_dir=output_dir,
+            )
 
 
 def plot_systematic_residual_maps(

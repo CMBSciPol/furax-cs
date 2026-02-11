@@ -3,8 +3,8 @@
 
 # Collect all kmeans job IDs here
 job_ids=()
-BATCH_PARAMS='--account=nih@a100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C a100'
-BATCH_PARAMS="--account=nih@h100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C h100"
+BATCH_PARAMS='--account=nih@a100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C a100 --time=05:00:00 --parsable'
+BATCH_PARAMS="--account=nih@h100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C h100 --time=05:00:00 --parsable"
 # Define the 5 sets of parameters to run
 # Format: "B_DUST T_DUST B_SYNC VARYING_PARAM"
 # VARYING_PARAM key: 1=B_DUST, 2=T_DUST, 3=B_SYNC
@@ -18,6 +18,7 @@ CONFIGS=(
     "10000 0 300 2"  # Case 7: B_DUST=10000, B_SYNC=300, Vary T_DUST
 )
 
+SOLVER="ADABK0"
 # Ranges for varying parameters
 # For Case 1 & 2 (low values)
 RANGE_LOW="50 100 150 200 250 300 350 400 450"
@@ -62,14 +63,18 @@ for config in "${CONFIGS[@]}"; do
         # Submit jobs for 3 masks
         for MASK in GAL020 GAL040 GAL060; do
              NAME="kmeans_c1d1s1_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
-             jid=$(sbatch $BATCH_PARAMS --job-name=${JOB_NAME}_${MASK} \
-                $SLURM_SCRIPT $OUTPUT_DIR \
-                kmeans-model -n 64 -ns 10 -nr 1.0 \
-                -pc $B_DUST $T_DUST $B_SYNC \
-                -tag c1d1s1 -m $MASK -i LiteBIRD \
-                -s active_set_adabelief -top_k 0.4 -mi 2000 \
-                --name $NAME -o $OUTPUT_DIR)
-             current_job_ids+=("$jid")
+             if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
+                 jid=$(sbatch $BATCH_PARAMS --job-name=${JOB_NAME}_${MASK} \
+                    $SLURM_SCRIPT $OUTPUT_DIR \
+                    kmeans-model -n 64 -ns 10 -nr 1.0 \
+                    -pc $B_DUST $T_DUST $B_SYNC \
+                    -tag c1d1s1 -m $MASK -i LiteBIRD \
+                    -s $SOLVER -mi 2000 \
+                    --name $NAME -o $OUTPUT_DIR)
+                 current_job_ids+=("$jid")
+             else
+                 echo "Skipping $NAME (already done)"
+             fi
         done
     done
     
@@ -81,11 +86,13 @@ for config in "${CONFIGS[@]}"; do
     if [ "$VARY_IDX" -eq 2 ]; then REGEX="kmeans_c1d1s1_BD${B_DUST}_TD(\d+)_BS${B_SYNC}"; fi
     if [ "$VARY_IDX" -eq 3 ]; then REGEX="kmeans_c1d1s1_BD${B_DUST}_TD${T_DUST}_BS(\d+)"; fi
 
-    sbatch --dependency=afterany:$deps \
-        $BATCH_PARAMS \
-        --job-name=ANA_${OUTPUT_BASE} \
-        $SLURM_SCRIPT $OUTPUT_DIR \
-        r_analysis snap -r "$REGEX" -ird $OUTPUT_DIR \
-        -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD
+    if [ -n "$deps" ]; then
+        sbatch --dependency=afterany:$deps \
+            $BATCH_PARAMS \
+            --job-name=ANA_${OUTPUT_BASE} \
+            $SLURM_SCRIPT $OUTPUT_DIR \
+            r_analysis snap -r "$REGEX" -ird $OUTPUT_DIR \
+            -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD
+    fi
 done
 
