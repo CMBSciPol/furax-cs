@@ -5,12 +5,13 @@ import os
 import pickle
 import re
 from pathlib import Path
-from typing import Any, TypeAlias, cast
+from typing import TypeAlias
 
 import camb
 import healpy as hp
 import jax.random as jr
 import numpy as np
+from camb import initialpower
 from furax._instruments.sky import get_observation, get_sky
 from furax.obs.operators import (
     CMBOperator,
@@ -27,8 +28,6 @@ from jaxtyping import (
     PRNGKeyArray,
     PyTree,  # pyright: ignore
 )
-from pysm3 import units as pysm_units
-from pysm3.models.cmb import CMBLensed
 
 from ..logging_utils import info, success
 from .instruments import get_instrument
@@ -36,26 +35,69 @@ from .instruments import get_instrument
 SkyType: TypeAlias = dict[str, Stokes]
 
 
-class CMBLensedWithTensors(CMBLensed):
-    """CMBLensed subclass that generates CMB with custom tensor-to-scalar ratio r.
+def compute_Cl_from_camb(r: float, which: str = "total", lmax: int = 2000) -> np.ndarray:
+    """Compute CMB power spectra from CAMB.
 
-    Uses PySM's taylens algorithm for proper lensing, which correctly generates
-    B-modes from E-modes via gravitational lensing deflection.
+    Args:
+        r: Tensor-to-scalar ratio.
+        which: Spectrum type - "total" (lensed total) or "tensor".
+        lmax: Maximum multipole.
+
+    Returns:
+        Power spectrum array of shape (lmax+1, 4) for TT, EE, BB, TE.
+    """
+    cosmo_params = camb.set_params(
+        Alens=1.0,
+        H0=67.5,
+        ombh2=0.022,
+        omch2=0.122,
+        mnu=0.06,
+        omk=0,
+        tau=0.06,
+        As=2e-9,
+        ns=0.965,
+        halofit_version="mead",
+        max_l_tensor=lmax,
+        max_eta_k_tensor=18000,
+        parameterization="tensor_param_indeptilt",
+    )
+    cosmo_params.set_for_lmax(lmax, lens_potential_accuracy=1)
+    cosmo_params.WantTensors = True
+
+    infl_params = initialpower.InitialPowerLaw()
+    infl_params.set_params(ns=0.96, r=r, parameterization="tensor_param_indeptilt", nt=0, ntrun=0)
+    cosmo_params.InitPower = infl_params
+
+    results = camb.get_results(cosmo_params)
+    spectra = results.get_cmb_power_spectra(cosmo_params, CMB_unit="muK", raw_cl=True)
+    return spectra[which]  # Shape: (lmax+1, 4) for TT, EE, BB, TE
+
+
+_CL_PRIMORDIAL_R1: np.ndarray | None = None
+_CL_LENSING: np.ndarray | None = None
+
+
+def _get_template_spectra(lmax: int = 2000) -> tuple[np.ndarray, np.ndarray]:
+    """Get or compute template spectra for linear approximation."""
+    global _CL_PRIMORDIAL_R1, _CL_LENSING
+    if _CL_PRIMORDIAL_R1 is None:
+        _CL_PRIMORDIAL_R1 = compute_Cl_from_camb(r=1.0, which="tensor", lmax=lmax)
+    if _CL_LENSING is None:
+        _CL_LENSING = compute_Cl_from_camb(r=0.0, which="total", lmax=lmax)
+    return _CL_PRIMORDIAL_R1, _CL_LENSING
+
+
+class CMBLensedWithTensors:
+    """CMB map generator with custom tensor-to-scalar ratio r.
+
+    Uses CAMB for power spectra and healpy synfast for map generation.
+    Power spectra are computed as: Cl(r) = r * Cl_tensor(r=1) + Cl_lensing
 
     Args:
         nside: HEALPix resolution parameter.
         r: Tensor-to-scalar ratio. Defaults to 0.0.
         cmb_seed: Random seed for map generation.
-        max_nside: Maximum nside for the model.
-        apply_delens: Whether to apply delensing. Defaults to False.
-        delensing_ells: Delensing ells file path.
-        map_dist: Distribution for parallel computing.
-        H0: Hubble constant. Defaults to 67.5.
-        ombh2: Baryon density. Defaults to 0.022.
-        omch2: CDM density. Defaults to 0.122.
-        As: Scalar amplitude. Defaults to 2e-9.
-        ns: Scalar spectral index. Defaults to 0.965.
-        lmax: Maximum multipole for power spectra. Defaults to 2500.
+        lmax: Maximum multipole for power spectra. Defaults to 2000.
     """
 
     def __init__(
@@ -63,72 +105,37 @@ class CMBLensedWithTensors(CMBLensed):
         nside: int,
         r: float = 0.0,
         cmb_seed: int | None = None,
-        max_nside: int | None = None,
-        apply_delens: bool = False,
-        delensing_ells: Path | None = None,
-        map_dist: Any = None,
-        H0: float = 67.5,
-        ombh2: float = 0.022,
-        omch2: float = 0.122,
-        As: float = 2e-9,
-        ns: float = 0.965,
-        lmax: int = 2500,
+        lmax: int = 2000,
     ):
-        # Generate CAMB spectra with tensors
-        pars = camb.CAMBparams()
-        pars.set_cosmology(H0=H0, ombh2=ombh2, omch2=omch2)
-        pars.InitPower.set_params(As=As, ns=ns, r=r)
-        if r > 0:
-            pars.WantTensors = True
-        pars.set_for_lmax(lmax, lens_potential_accuracy=1)
-
-        results = camb.get_results(pars)
-        powers = results.get_cmb_power_spectra(pars, CMB_unit="muK", raw_cl=False, lmax=lmax)
-
-        # Build spectra in PySM format: [ell, TT, EE, BB, TE, PP, TP, EP]
-        # Uses UNLENSED spectra - taylens will apply lensing
-        ells_all = np.arange(lmax + 1)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            # Avoid division by zero for ell=0,1 (though we slice them off anyway)
-            conversion = 2 * np.pi / (ells_all * (ells_all + 1))
-            conversion[0:2] = 0.0
-
-        dl_tt = powers["unlensed_total"][2 : lmax + 1, 0]
-        dl_ee = powers["unlensed_total"][2 : lmax + 1, 1]
-        dl_bb = powers["unlensed_total"][2 : lmax + 1, 2]  # This contains tensor BB
-        dl_te = powers["unlensed_total"][2 : lmax + 1, 3]
-
-        # Convert to Cl
-        ell_range_inputs = ells_all[2 : lmax + 1]
-        # conv_factor = conversion[2 : lmax + 1]
-
-        # Apply conversion when assigning to spectra
-
-        spectra = np.zeros((8, len(ell_range_inputs)))
-        spectra[0] = ell_range_inputs
-        spectra[1] = dl_tt
-        spectra[2] = dl_ee
-        spectra[3] = dl_bb
-        spectra[4] = dl_te
-        # Note: lens_potential is usually dimensionless or different units,
-        # check CAMB docs, but usually they are PP, not D_ell.
-        # For safety, assuming standard CAMB output for potentials is usually correct for PySM
-        # but strictly PySM expects Cl for potentials too.
-        spectra[5] = powers["lens_potential"][2 : lmax + 1, 0]  # PP
-        spectra[6] = powers["lens_potential"][2 : lmax + 1, 1]  # TP
-        spectra[7] = powers["lens_potential"][2 : lmax + 1, 2]  # EP
-
-        # Store spectra and run taylens
         self.nside = nside
-        self.max_nside = max_nside
-        self.map_dist = map_dist
-        self.cmb_spectra = spectra
-        self.cmb_seed = cmb_seed
-        self.apply_delens = apply_delens
-        self.delensing_ells = delensing_ells
+        self.r = r
+        self.lmax = lmax
 
-        # Generate lensed maps via taylens (inherited method)
-        self.map = pysm_units.Quantity(self.run_taylens(), unit=pysm_units.uK_CMB, copy=False)
+        # Get template spectra (lazy-loaded)
+        cl_primordial_r1, cl_lensing = _get_template_spectra(lmax)
+
+        # Linear combination: Cl(r) = r * Cl_tensor(r=1) + Cl_lensing
+        # Shape: (lmax+1, 4) for TT, EE, BB, TE
+        cl_total = r * cl_primordial_r1 + cl_lensing
+
+        # Extract spectra for synfast: TT, EE, BB, TE
+        cl_tt = cl_total[:, 0]
+        cl_ee = cl_total[:, 1]
+        cl_bb = cl_total[:, 2]
+        cl_te = cl_total[:, 3]
+
+        # Generate maps with healpy synfast
+        # Returns (T, Q, U) maps in uK_CMB
+        # Set numpy random seed for reproducibility
+        if cmb_seed is not None:
+            np.random.seed(cmb_seed)
+        self.map = np.array(
+            hp.synfast(
+                [cl_tt, cl_ee, cl_bb, cl_te],
+                nside=nside,
+                new=True,
+            )
+        )
 
 
 def parse_sky_tag(sky: str) -> tuple[str | None, str]:
@@ -169,8 +176,7 @@ def generate_custom_cmb(
 ) -> Float[Array, "3 npix"]:
     """Generate a CMB realization with a specific tensor-to-scalar ratio r.
 
-    Uses PySM's taylens algorithm for proper lensing, which correctly generates
-    B-modes from E-modes via gravitational lensing deflection.
+    Uses CAMB + healpy synfast with linear approximation for B-modes.
 
     Args:
         r_value: Tensor-to-scalar ratio.
@@ -185,8 +191,7 @@ def generate_custom_cmb(
     """
     info(f"generating with r_value {r_value}")
     cmb = CMBLensedWithTensors(nside=nside, r=r_value, cmb_seed=seed)
-    cmb_map = cast(Float[Array, "3 npix"], cmb.map.value)
-    return cmb_map
+    return cmb.map  # Already (3, npix) numpy array
 
 
 def save_to_cache(
