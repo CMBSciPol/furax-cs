@@ -48,7 +48,7 @@ except ImportError:
     raise ImportError(
         "jax_hpc_profiler is required for benchmark scripts. Install with:\n"
         "  pip install furax-cs[benchmarks]"
-    )
+    ) from None
 
 jax.config.update("jax_enable_x64", True)
 
