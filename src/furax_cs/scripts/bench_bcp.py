@@ -61,7 +61,14 @@ from furax.obs import negative_log_likelihood
 from furax.obs.landscapes import Stokes
 from furax_cs import load_from_cache, minimize, save_to_cache
 from furax_cs.logging_utils import info
-from jax_hpc_profiler import JaxTimer, NumpyTimer
+
+try:
+    from jax_hpc_profiler import JaxTimer, NumpyTimer
+except ImportError:
+    raise ImportError(
+        "jax_hpc_profiler is required for benchmark scripts. Install with:\n"
+        "  pip install furax-cs[benchmarks]"
+    ) from None
 
 jax.config.update("jax_enable_x64", True)
 
