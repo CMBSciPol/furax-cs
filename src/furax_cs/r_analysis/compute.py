@@ -441,12 +441,8 @@ def compute_group(
     )
     cl_bb_obs, cl_bb_r1, cl_bb_lens = None, None, None
     if flags["compute_total"] and flags["needs_r_estimation"] and cl_total_res is not None:
-        if is_full_sky:
-            cl_for_r = cl_true
-            noise_for_r = np.zeros_like(ell_range)
-        else:
-            cl_for_r = cl_total_res
-            noise_for_r = cl_stat_res if cl_stat_res is not None else np.zeros_like(ell_range)
+        cl_for_r = cl_total_res
+        noise_for_r = cl_stat_res if cl_stat_res is not None else np.zeros_like(ell_range)
         (
             r_best,
             sigma_r_neg,
