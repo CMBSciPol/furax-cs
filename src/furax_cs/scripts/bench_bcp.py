@@ -64,7 +64,7 @@ from furax.obs.landscapes import Stokes
 from furax_cs.data.generate_maps import load_from_cache, save_to_cache
 from furax_cs.logging_utils import info
 from furax_cs.optim import minimize
-from jax_hpc_profiler import Timer
+from jax_hpc_profiler import JaxTimer, NumpyTimer
 from jax_hpc_profiler.plotting import plot_weak_scaling
 
 jax.config.update("jax_enable_x64", True)
@@ -123,7 +123,7 @@ def run_jax_negative_log_prob(
     nu: Any,
     dust_nu0: float,
     synchrotron_nu0: float,
-    jax_timer: Timer,
+    jax_timer: Any,
 ) -> None:
     """
     Benchmark FURAX JAX-based negative log-likelihood evaluation.
@@ -360,8 +360,8 @@ def main():
     best_params = {"temp_dust": 20.0, "beta_dust": 1.54, "beta_pl": -3.0}
 
     # Step 3: Initialize performance timers for different frameworks
-    jax_timer = Timer(save_jaxpr=False, jax_fn=True)  # For JAX/FURAX functions
-    numpy_timer = Timer(save_jaxpr=False, jax_fn=False)  # For NumPy/FGBuster functions
+    jax_timer = JaxTimer(save_jaxpr=False)  # For JAX/FURAX functions
+    numpy_timer = NumpyTimer()  # For NumPy/FGBuster functions
 
     if args.likelihood and not args.plot_only:
         for nside in args.nsides:

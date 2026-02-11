@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-FGBuster Component Separation for CMB Polarization Analysis
+FGBuster Component Separation with Multi-Resolution Clustering
 
-This script implements adaptive K-means clustering for optimizing parametric
+This script implements multi-resolution clustering for optimizing parametric
 component separation in CMB polarization analysis using FGBuster.
-The method uses spherical K-means to partition the sky based on spatial coordinates,
-then performs component separation using FGBuster's adaptive_comp_sep function.
+The method uses HEALPix ud_grade to partition the sky at different resolutions
+for each spectral parameter, then performs component separation using
+FGBuster's adaptive_comp_sep function.
 
-This is the NumPy/FGBuster equivalent of kmeans_model.py which uses JAX/Furax.
+This is the NumPy/FGBuster equivalent of ptep_model.py which uses JAX/Furax.
 
 Usage:
-    python fgbuster_model.py -n 64 -pc 100 5 1 -tag c1d1s1 -m GAL020 -i LiteBIRD
+    python fgbuster_model.py -n 64 -ud 64 32 16 -tag c1d1s1 -m GAL020 -i LiteBIRD
 
 Parameters:
-    -pc: Number of clusters for [dust_beta, dust_temp, sync_beta] parameters
+    -ud: Target nside values for [beta_dust, temp_dust, beta_pl] ud_grade clustering
     -tag: Sky simulation configuration tag
     -m: Galactic mask (GAL020, GAL040, GAL060)
     -i: Instrument specification
@@ -26,7 +27,7 @@ Output:
 
 Note:
     FGBuster operates with NumPy, not JAX. Multiple noise simulations are not
-    supported in this implementation (use kmeans_model.py for Monte Carlo analysis).
+    supported in this implementation (use ptep_model.py for Monte Carlo analysis).
 
 Author: FURAX Team
 """
@@ -64,7 +65,7 @@ except ImportError:
     )
 
 from furax.obs.stokes import Stokes
-from furax_cs import generate_noise_operator, kmeans_clusters
+from furax_cs import generate_noise_operator, multires_clusters
 from furax_cs.data.generate_maps import (
     MASK_CHOICES,
     get_mask,
@@ -82,7 +83,7 @@ jax.config.update("jax_enable_x64", True)
 
 def parse_args() -> argparse.Namespace:
     """
-    Parse command-line arguments for FGBuster component separation.
+    Parse command-line arguments for FGBuster multi-resolution component separation.
 
     Returns
     -------
@@ -94,11 +95,11 @@ def parse_args() -> argparse.Namespace:
         - tag: Sky simulation configuration identifier
         - mask: Galactic mask choice (GAL020, GAL040, GAL060)
         - instrument: Instrument configuration (LiteBIRD, Planck)
-        - patch_count: Target cluster counts for [dust_beta, dust_temp, sync_beta]
+        - target_ud_grade: Target nside values for [beta_dust, temp_dust, beta_pl]
         - best_only: Flag to only compute optimal configuration
     """
     parser = argparse.ArgumentParser(
-        description="FGBuster Component Separation for CMB Polarization Analysis"
+        description="FGBuster Component Separation with Multi-Resolution Clustering"
     )
 
     parser.add_argument(
@@ -154,14 +155,14 @@ def parse_args() -> argparse.Namespace:
         help="Instrument configuration with frequency bands and noise characteristics",
     )
     parser.add_argument(
-        "-pc",
-        "--patch-count",
-        type=int,
+        "-ud",
+        "--target-ud-grade",
+        type=float,
         nargs=3,
-        default=[1000, 10, 10],
+        default=[64, 32, 16],
         help=(
-            "List of three target patch counts for beta_dust, temp_dust, and beta_pl. "
-            "Example: --patch-count 1000 10 10"
+            "List of three target nside values (for ud_grade downgrading) corresponding to "
+            "beta_dust, temp_dust, beta_pl respectively"
         ),
     )
     parser.add_argument(
@@ -192,6 +193,12 @@ def parse_args() -> argparse.Namespace:
         default="results",
         help="Output directory for results",
     )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default=None,
+        help="Override the default output folder name.",
+    )
     return parser.parse_args()
 
 
@@ -212,10 +219,6 @@ def run_fgbuster_comp_sep(
         Frequency maps with shape (n_freq, n_stokes, n_pix) or (n_freq, 2, n_pix) for QU
     patch_ids_fg : list of ndarray
         List of patch indices for [temp_dust, beta_dust, beta_pl]
-    dust_nu0 : float
-        Dust reference frequency in GHz
-    synchrotron_nu0 : float
-        Synchrotron reference frequency in GHz
     instrument : dict
         FGBuster instrument specification
     max_iter : int
@@ -265,16 +268,16 @@ def run_fgbuster_comp_sep(
 
 def main():
     """
-    Main execution function for FGBuster component separation.
+    Main execution function for FGBuster multi-resolution component separation.
 
-    Implements the adaptive clustering algorithm that partitions the sky into
+    Implements the multi-resolution clustering algorithm that partitions the sky into
     regions with spatially-varying spectral parameters using FGBuster's
     adaptive_comp_sep function.
 
     Algorithm Steps:
     1. Initialize sky masks and clustering parameters
     2. Load CMB and foreground simulations
-    3. Perform spherical K-means clustering on sky coordinates
+    3. Perform multi-resolution clustering via HEALPix ud_grade
     4. Run FGBuster adaptive component separation
     5. Evaluate CMB reconstruction variance
     6. Save clustering configuration and parameters
@@ -283,8 +286,11 @@ def main():
     args = parse_args()
 
     # Setup output directory
-    patches = f"BD{args.patch_count[0]}_TD{args.patch_count[1]}_BS{args.patch_count[2]}"
-    out_folder = f"{args.output}/fgbuster_{args.tag}_{patches}_{args.instrument}_{sanitize_mask_name(args.mask)}_{int(args.noise_ratio * 100)}"
+    if args.name is not None:
+        out_folder = f"{args.output}/{args.name}"
+    else:
+        ud_grades = f"BD{int(args.target_ud_grade[0])}_TD{int(args.target_ud_grade[1])}_BS{int(args.target_ud_grade[2])}"
+        out_folder = f"{args.output}/fgbuster_multires_{args.tag}_{ud_grades}_{args.instrument}_{sanitize_mask_name(args.mask)}_{int(args.noise_ratio * 100)}"
 
     # Step 2: Initialize physical and computational parameters
     nside = args.nside
@@ -299,12 +305,7 @@ def main():
     (indices,) = jnp.where(mask == 1)
     (unseen_indices,) = jnp.where(mask != 1)
 
-    # Step 4: Determine maximum cluster counts (limited by available pixels)
-    B_dust_patches = min(args.patch_count[0], indices.size)
-    T_dust_patches = min(args.patch_count[1], indices.size)
-    B_synchrotron_patches = min(args.patch_count[2], indices.size)
-
-    # Step 5: Load frequency maps and component maps
+    # Step 4: Load frequency maps and component maps
     info(f"Loading data for nside={nside}, tag={args.tag}, instrument={args.instrument}")
     _, freqmaps = load_from_cache(nside, instrument_name=args.instrument, sky=args.tag)
     _, fg_maps = load_fg_map(nside, instrument_name=args.instrument, sky=args.tag)
@@ -329,18 +330,18 @@ def main():
 
     d_cutout = get_cutout_from_mask(d, indices, axis=1)
 
-    # Step 6: Perform K-means clustering for patch indices
+    # Step 5: Perform multi-resolution clustering for patch indices
+    target_ud_grade = {
+        "beta_dust": int(args.target_ud_grade[0]),
+        "temp_dust": int(args.target_ud_grade[1]),
+        "beta_pl": int(args.target_ud_grade[2]),
+    }
     info(
-        f"Computing K-means clusters: T_dust={T_dust_patches}, B_dust={B_dust_patches}, B_sync={B_synchrotron_patches}"
+        f"Computing multi-resolution clusters: beta_dust@NS{target_ud_grade['beta_dust']}, "
+        f"temp_dust@NS{target_ud_grade['temp_dust']}, beta_pl@NS{target_ud_grade['beta_pl']}"
     )
 
-    n_regions = {
-        "temp_dust_patches": T_dust_patches,
-        "beta_dust_patches": B_dust_patches,
-        "beta_pl_patches": B_synchrotron_patches,
-    }
-    # Get cutout clusters using kmeans_clusters
-    cutout_clusters = kmeans_clusters(jax.random.key(0), mask, indices, n_regions)
+    cutout_clusters = multires_clusters(mask, indices, target_ud_grade, nside)
 
     # Convert cutout clusters to full-sky maps for FGBuster
     # FGBuster needs full-sky maps where masked pixels have max cluster index
@@ -375,14 +376,14 @@ def main():
 
     from tqdm import tqdm
 
-    # Step 7 & 8: Loop over noise simulations and Run FGBuster
+    # Step 6 & 7: Loop over noise simulations and Run FGBuster
     info(f"Running {args.noise_sim} noise simulations with FGBuster")
 
     for sim_idx in tqdm(
         range(args.seed_start, args.seed_start + args.noise_sim), desc="FGBuster Simulations"
     ):
         # Generate noise on cutout using standard Furax generator
-        # This ensures exact match with kmeans_model.py
+        # This ensures exact match with ptep_model.py
         key = jax.random.PRNGKey(sim_idx)
         noised_d_cutout, _, small_n_cutout = generate_noise_operator(
             key, args.noise_ratio, indices, nside, d_cutout, furax_instrument
@@ -419,7 +420,7 @@ def main():
         end_time = perf_counter()
         info(f"Run {sim_idx} component separation took {end_time - start_time:.2f} seconds")
 
-        # Step 9: Extract results
+        # Step 8: Extract results
         # OUTPUT CONVERSION: Convert FGBuster outputs from full maps to cutouts
         cmb_q_full, cmb_u_full = result.s[0]  # CMB is the first component (full map)
 

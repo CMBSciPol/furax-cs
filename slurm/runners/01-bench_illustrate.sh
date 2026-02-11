@@ -15,4 +15,4 @@ sbatch $SBATCH_ARGS --job-name=BENCH_ADA5 $SLURM_SCRIPT BENCH bench-clusters -n 
 sbatch $SBATCH_ARGS --job-name=BENCH_ADA0 $SLURM_SCRIPT BENCH bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 --jax-solver ADABK0 --noise 1.0
 
 # 4. Conditioned AdaBelief Active Set
-sbatch $SBATCH_ARGS --job-name=BENCH_ADAC $SLURM_SCRIPT BENCH bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 --jax-solver active_set_adabelief --precondition --noise 1.0
+sbatch $SBATCH_ARGS --job-name=BENCH_ADAC $SLURM_SCRIPT BENCH bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 --jax-solver adabelief --precondition --noise 1.0

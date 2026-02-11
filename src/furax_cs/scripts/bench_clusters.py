@@ -30,14 +30,14 @@ except ImportError:
         "  pip install git+https://github.com/fgbuster/fgbuster.git"
     )
 
-from furax import HomothetyOperator
 from furax.obs import negative_log_likelihood, spectral_cmb_variance
 from furax.obs.stokes import Stokes
+from furax_cs import generate_noise_operator
 from furax_cs.data.generate_maps import load_from_cache, save_to_cache
 from furax_cs.logging_utils import info
 from furax_cs.optim import minimize
 from jax_healpy.clustering import find_kmeans_clusters
-from jax_hpc_profiler import Timer
+from jax_hpc_profiler import JaxTimer, NumpyTimer
 from jax_hpc_profiler.plotting import plot_weak_scaling
 
 jax.config.update("jax_enable_x64", True)
@@ -53,14 +53,17 @@ def run_fg_buster(
     max_iter: int,
     tol: float,
     fgbuster_solver: str,
+    instrument: Any,
+    noise_ratio: float,
+    n_sims: int,
 ) -> tuple[Any, Any, Any]:
     info(
         f"Running FGBuster {fgbuster_solver} Comp sep nside={nside} cluster_count={cluster_count}..."
     )
 
-    d = Stokes.from_stokes(Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
+    d_clean = Stokes.from_stokes(Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
 
-    mask = jnp.ones_like(d.q[0]).astype(jnp.int64)
+    mask = jnp.ones_like(d_clean.q[0]).astype(jnp.int64)
 
     (indices,) = jnp.where(mask == 1)
 
@@ -105,25 +108,51 @@ def run_fg_buster(
     ]
 
     components = [CMB(), Dust(dust_nu0), Synchrotron(synchrotron_nu0)]
-    freq_maps_fg = jnp.stack([d.q, d.u], axis=1)
 
     bounds = [(0.5, 5.0), (10.0, 40), (-6.0, -1.0)]
     options = {"disp": False, "gtol": tol, "eps": tol, "maxiter": max_iter, "tol": tol}
     method = fgbuster_solver
-    instrument = get_instrument("LiteBIRD")
+    # instrument = get_instrument("LiteBIRD") # Provided as arg now
 
-    freq_maps_fg = np.asarray(freq_maps_fg)
     patch_ids_fg = [np.asarray(p) for p in patch_ids_fg]
 
     comp_sep = partial(adaptive_comp_sep, bounds=bounds, options=options, method=method, tol=tol)
 
-    result = numpy_timer.chrono_jit(comp_sep, components, instrument, freq_maps_fg, patch_ids_fg)
+    def single_run_fgbuster(seed_key):
+        noised_d, _, _ = generate_noise_operator(
+            seed_key, noise_ratio, indices, nside, d_clean, instrument
+        )
+        freq_maps_fg = jnp.stack([noised_d.q, noised_d.u], axis=1)
+        freq_maps_fg = np.asarray(freq_maps_fg)
 
-    cmb_q, cmb_u = result.s[0]
+        result = comp_sep(components, instrument, freq_maps_fg, patch_ids_fg)
 
-    cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, (cmb_q, cmb_u)))
+        cmb_q, cmb_u = result.s[0]
+        cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, (cmb_q, cmb_u)))
 
-    return result.x, cmb_var, result.fun
+        return result.params, cmb_var, result.fun
+
+    variances = []
+    likelihoods = []
+    final_params_raw: Any = None
+
+    for i in range(n_sims):
+        seed = jax.random.PRNGKey(i)
+        params, var, nll = numpy_timer.chrono_fun(single_run_fgbuster, seed)
+        variances.append(var)
+        likelihoods.append(nll)
+        final_params_raw = params
+
+    avg_var = np.mean(variances)
+    avg_nll = np.mean(likelihoods)
+
+    final_params = {
+        "beta_dust": final_params_raw[0],
+        "temp_dust": final_params_raw[1],
+        "beta_pl": final_params_raw[2],
+    }
+
+    return final_params, avg_var, avg_nll
 
 
 def run_jax_minimize(
@@ -138,6 +167,9 @@ def run_jax_minimize(
     tol: float,
     solver_name: str,
     precondition: bool,
+    instrument: Any,
+    noise_ratio: float,
+    n_sims: int,
 ) -> tuple[Any, Any, Any]:
     """Run JAX-based negative log-likelihood with configurable solver."""
 
@@ -176,9 +208,9 @@ def run_jax_minimize(
         best_params,
     )
 
-    d = Stokes.from_stokes(Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
-    invN = HomothetyOperator(jnp.ones(1), _in_structure=d.structure)
-    mask = jnp.ones_like(d.q[0]).astype(jnp.int64)
+    d_clean = Stokes.from_stokes(Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
+    # invN = HomothetyOperator(jnp.ones(1), _in_structure=d.structure) # Replaced by generated noise
+    mask = jnp.ones_like(d_clean.q[0]).astype(jnp.int64)
 
     (indices,) = jnp.where(mask == 1)
 
@@ -213,41 +245,64 @@ def run_jax_minimize(
         "beta_pl_patches": beta_pl_patch_indices.astype(jnp.int64),
     }
 
-    nll = partial(
-        negative_log_likelihood,
-        nu=nu,
-        N=invN,
-        d=d,
-        dust_nu0=dust_nu0,
-        synchrotron_nu0=synchrotron_nu0,
-        patch_indices=patch_indices,
-        analytical_gradient=True,
-    )
+    def furax_adaptative_comp_sep(guess_params, seed_key):
+        noised_d, N, _ = generate_noise_operator(
+            seed_key, noise_ratio, indices, nside, d_clean, instrument
+        )
 
-    def furax_adaptative_comp_sep(guess_params):
+        nll = partial(
+            negative_log_likelihood,
+            nu=nu,
+            N=N,
+            d=noised_d,
+            dust_nu0=dust_nu0,
+            synchrotron_nu0=synchrotron_nu0,
+            patch_indices=patch_indices,
+            analytical_gradient=True,
+        )
+
         final_params, _ = minimize(
             fn=nll,
             init_params=guess_params,
             solver_name=solver_name,
             max_iter=max_iter,
-            rtol=tol,
+            rtol=tol * 1e5,
             atol=tol,
             precondition=precondition,
             lower_bound=lower_params,
             upper_bound=upper_params,
         )
-        return final_params["beta_pl"], final_params
 
-    _, final_params = jax_timer.chrono_jit(furax_adaptative_comp_sep, guess_params)
-    for _ in range(2):
-        jax_timer.chrono_fun(furax_adaptative_comp_sep, guess_params)
+        last_L = nll(final_params)
+        cmb_variance = spectral_cmb_variance(
+            final_params, nu, N, noised_d, dust_nu0, synchrotron_nu0, patch_indices
+        )
 
-    last_L = nll(final_params)
-    cmb_variance = spectral_cmb_variance(
-        final_params, nu, invN, d, dust_nu0, synchrotron_nu0, patch_indices
-    )
+        # Return beta_pl only as the "result" for compatibility with original code structure?
+        # The original code returned (final_params["beta_pl"], final_params)
+        # But Timer calls this. We need to extract variance and L later.
+        # Let's return full tuple.
+        return final_params, cmb_variance, last_L
 
-    return final_params, cmb_variance, last_L
+    variances = []
+    likelihoods = []
+    final_params = None
+
+    for i in range(n_sims):
+        seed = jax.random.PRNGKey(i)
+        if i == 0:
+            params, var, nll = jax_timer.chrono_jit(furax_adaptative_comp_sep, guess_params, seed)
+        else:
+            params, var, nll = jax_timer.chrono_fun(furax_adaptative_comp_sep, guess_params, seed)
+
+        variances.append(var)
+        likelihoods.append(nll)
+        final_params = params
+
+    avg_var = np.mean(variances)
+    avg_nll = np.mean(likelihoods)
+
+    return final_params, avg_var, avg_nll
 
 
 def parse_args() -> argparse.Namespace:
@@ -331,6 +386,12 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Noise ratio (0.0 = no noise, 1.0 = 100%% noise)",
     )
+    parser.add_argument(
+        "--n-sims",
+        type=int,
+        default=3,
+        help="Number of noise simulations for benchmarking",
+    )
     return parser.parse_args()
 
 
@@ -341,18 +402,18 @@ def main():
     # stokes_type = 'IQU'
     dust_nu0, synchrotron_nu0 = 150.0, 20.0
 
-    jax_timer = Timer(save_jaxpr=True, jax_fn=True)
-    np_timer = Timer(save_jaxpr=False, jax_fn=False)
+    jax_timer = JaxTimer(save_jaxpr=True)
+    np_timer = NumpyTimer()
 
     if not args.plot_only:
         for nside in args.nsides:
             sky = "c1d0s0"
-            save_to_cache(nside, sky=sky, noise_ratio=args.noise)
+            save_to_cache(nside, sky=sky, noise_ratio=0.0)
 
             if args.cache_run:
                 continue
 
-            nu, freq_maps = load_from_cache(nside, sky=sky, noise_ratio=args.noise)
+            nu, freq_maps = load_from_cache(nside, sky=sky, noise_ratio=0.0)
 
             for cluster_count in args.clusters:
                 # Solver mode benchmarking
@@ -370,16 +431,21 @@ def main():
                         args.max_iter,
                         args.tol,
                         args.fgbuster_solver,
+                        instrument,
+                        args.noise,
+                        args.n_sims,
                     )
                     data = {
-                        "final_params": final_params,
                         "cmb_variance": cmb_variance,
                         "last_L": last_L,
                     }
+                    data.update(**final_params)
                     kwargs = {
                         "function": f"FGBuster-{args.fgbuster_solver} n={nside}",
                         "precision": "float64",
                         "x": cluster_count,
+                        "y": 1,
+                        "z": 1,
                         "npz_data": data,
                     }
                     np_timer.report("runs/CLUSTERS_FGBUSTER.csv", **kwargs)
@@ -398,12 +464,15 @@ def main():
                         args.tol,
                         args.jax_solver,
                         args.precondition,
+                        instrument,
+                        args.noise,
+                        args.n_sims,
                     )
                     data = {
-                        "final_params": final_params,
                         "cmb_variance": cmb_variance,
                         "last_L": last_L,
                     }
+                    data.update(**final_params)
                     kwargs = {
                         "function": f"Furax-{args.jax_solver} n={nside}",
                         "precision": "float64",
