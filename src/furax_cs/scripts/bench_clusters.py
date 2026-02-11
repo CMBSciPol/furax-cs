@@ -41,7 +41,14 @@ from furax_cs import (
     get_instrument as get_instrument_furax,
 )
 from furax_cs.logging_utils import info
-from jax_hpc_profiler import JaxTimer, NumpyTimer
+
+try:
+    from jax_hpc_profiler import JaxTimer, NumpyTimer
+except ImportError:
+    raise ImportError(
+        "jax_hpc_profiler is required for benchmark scripts. Install with:\n"
+        "  pip install furax-cs[benchmarks]"
+    )
 
 jax.config.update("jax_enable_x64", True)
 
