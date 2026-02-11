@@ -13,18 +13,19 @@ import jax.random
 import numpy as np
 from furax.obs import negative_log_likelihood, sky_signal
 from furax.obs.stokes import Stokes
-from furax_cs import generate_noise_operator, multires_clusters
-from furax_cs.data.generate_maps import (
+from furax_cs import (
     MASK_CHOICES,
+    generate_noise_operator,
+    get_instrument,
     get_mask,
     load_cmb_map,
     load_fg_map,
     load_from_cache,
+    minimize,
+    multires_clusters,
     sanitize_mask_name,
 )
-from furax_cs.data.instruments import get_instrument
 from furax_cs.logging_utils import info, success
-from furax_cs.optim import minimize
 from jax_healpy.clustering import get_cutout_from_mask
 from tqdm import tqdm
 

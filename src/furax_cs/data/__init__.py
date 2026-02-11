@@ -1,6 +1,7 @@
 """Data generation and instrument configuration for CMB component separation."""
 
 from .generate_maps import (
+    MASK_CHOICES,
     CMBLensedWithTensors,
     generate_custom_cmb,
     generate_needed_maps,
@@ -32,6 +33,7 @@ __all__ = [
     "save_fg_map",
     "save_to_cache",
     "simulate_D_from_params",
+    "MASK_CHOICES",
     "get_mask",
     "get_instrument",
     "load_search_space",

@@ -70,18 +70,19 @@ from furax.obs import (
 from furax.obs.landscapes import FrequencyLandscape
 from furax.obs.operators import NoiseDiagonalOperator
 from furax.obs.stokes import Stokes
-from furax_cs.data.generate_maps import (
+from furax_cs import (
     MASK_CHOICES,
+    dump_default_search_space,
+    get_instrument,
     get_mask,
     load_cmb_map,
     load_fg_map,
     load_from_cache,
+    load_search_space,
+    minimize,
     sanitize_mask_name,
 )
-from furax_cs.data.instruments import get_instrument
-from furax_cs.data.search_space import dump_default_search_space, load_search_space
 from furax_cs.logging_utils import info, success
-from furax_cs.optim import minimize
 from jax_grid_search import DistributedGridSearch
 from jax_healpy.clustering import (
     find_kmeans_clusters,

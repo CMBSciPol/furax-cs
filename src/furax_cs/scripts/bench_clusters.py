@@ -9,9 +9,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 from jaxtyping import Array
 
 try:
@@ -32,13 +30,18 @@ except ImportError:
 
 from furax.obs import negative_log_likelihood, spectral_cmb_variance
 from furax.obs.stokes import Stokes
-from furax_cs import generate_noise_operator
-from furax_cs.data.generate_maps import load_from_cache, save_to_cache
+from furax_cs import (
+    generate_noise_operator,
+    kmeans_clusters,
+    load_from_cache,
+    minimize,
+    save_to_cache,
+)
+from furax_cs import (
+    get_instrument as get_instrument_furax,
+)
 from furax_cs.logging_utils import info
-from furax_cs.optim import minimize
-from jax_healpy.clustering import find_kmeans_clusters
 from jax_hpc_profiler import JaxTimer, NumpyTimer
-from jax_hpc_profiler.plotting import plot_weak_scaling
 
 jax.config.update("jax_enable_x64", True)
 
@@ -53,7 +56,7 @@ def run_fg_buster(
     max_iter: int,
     tol: float,
     fgbuster_solver: str,
-    instrument: Any,
+    instrument_name: Any,
     noise_ratio: float,
     n_sims: int,
 ) -> tuple[Any, Any, Any]:
@@ -76,45 +79,27 @@ def run_fg_buster(
     n_beta_dust = max(1, n_beta_dust)
     n_temp_dust = max(1, n_temp_dust)
     n_beta_pl = max(1, n_beta_pl)
-
-    temp_dust_patch_indices = find_kmeans_clusters(
-        mask,
-        indices,
-        n_temp_dust,
-        jax.random.PRNGKey(0),
-        max_centroids=n_temp_dust,
-        initial_sample_size=1,
-    )
-    beta_dust_patch_indices = find_kmeans_clusters(
-        mask,
-        indices,
-        n_beta_dust,
-        jax.random.PRNGKey(1),
-        max_centroids=n_beta_dust,
-        initial_sample_size=1,
-    )
-    beta_pl_patch_indices = find_kmeans_clusters(
-        mask,
-        indices,
-        n_beta_pl,
-        jax.random.PRNGKey(2),
-        max_centroids=n_beta_pl,
-        initial_sample_size=1,
-    )
-    patch_ids_fg = [
-        temp_dust_patch_indices.astype(jnp.int64),
-        beta_dust_patch_indices.astype(jnp.int64),
-        beta_pl_patch_indices.astype(jnp.int64),
-    ]
-
+    n_regions = {
+        "temp_dust_patches": n_temp_dust,
+        "beta_dust_patches": n_beta_dust,
+        "beta_pl_patches": n_beta_pl,
+    }
+    patch_ids_fg = kmeans_clusters(jax.random.PRNGKey(0), mask, indices, n_regions, n_regions)
     components = [CMB(), Dust(dust_nu0), Synchrotron(synchrotron_nu0)]
 
     bounds = [(0.5, 5.0), (10.0, 40), (-6.0, -1.0)]
     options = {"disp": False, "gtol": tol, "eps": tol, "maxiter": max_iter, "tol": tol}
     method = fgbuster_solver
-    # instrument = get_instrument("LiteBIRD") # Provided as arg now
+    instrument = get_instrument_furax(instrument_name)  # Provided as arg now
 
-    patch_ids_fg = [np.asarray(p) for p in patch_ids_fg]
+    patch_ids_fg = np.stack(
+        [
+            patch_ids_fg["beta_dust_patches"],
+            patch_ids_fg["temp_dust_patches"],
+            patch_ids_fg["beta_pl_patches"],
+        ],
+        axis=0,
+    )
 
     comp_sep = partial(adaptive_comp_sep, bounds=bounds, options=options, method=method, tol=tol)
 
@@ -167,7 +152,7 @@ def run_jax_minimize(
     tol: float,
     solver_name: str,
     precondition: bool,
-    instrument: Any,
+    instrument_name: Any,
     noise_ratio: float,
     n_sims: int,
 ) -> tuple[Any, Any, Any]:
@@ -209,41 +194,18 @@ def run_jax_minimize(
     )
 
     d_clean = Stokes.from_stokes(Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
-    # invN = HomothetyOperator(jnp.ones(1), _in_structure=d.structure) # Replaced by generated noise
     mask = jnp.ones_like(d_clean.q[0]).astype(jnp.int64)
 
     (indices,) = jnp.where(mask == 1)
 
-    temp_dust_patch_indices = find_kmeans_clusters(
-        mask,
-        indices,
-        n_temp_dust,
-        jax.random.PRNGKey(0),
-        max_centroids=n_temp_dust,
-        initial_sample_size=1,
-    )
-    beta_dust_patch_indices = find_kmeans_clusters(
-        mask,
-        indices,
-        n_beta_dust,
-        jax.random.PRNGKey(1),
-        max_centroids=n_beta_dust,
-        initial_sample_size=1,
-    )
-    beta_pl_patch_indices = find_kmeans_clusters(
-        mask,
-        indices,
-        n_beta_pl,
-        jax.random.PRNGKey(2),
-        max_centroids=n_beta_pl,
-        initial_sample_size=1,
-    )
-
-    patch_indices = {
-        "temp_dust_patches": temp_dust_patch_indices.astype(jnp.int64),
-        "beta_dust_patches": beta_dust_patch_indices.astype(jnp.int64),
-        "beta_pl_patches": beta_pl_patch_indices.astype(jnp.int64),
+    n_regions = {
+        "temp_dust_patches": n_temp_dust,
+        "beta_dust_patches": n_beta_dust,
+        "beta_pl_patches": n_beta_pl,
     }
+
+    patch_indices = kmeans_clusters(jax.random.PRNGKey(0), mask, indices, n_regions, n_regions)
+    instrument = get_instrument_furax(instrument_name)  # Provided as arg now
 
     def furax_adaptative_comp_sep(guess_params, seed_key):
         noised_d, N, _ = generate_noise_operator(
@@ -339,12 +301,6 @@ def parse_args() -> argparse.Namespace:
         help="Figure size for the plots (width, height)",
     )
     parser.add_argument(
-        "-p",
-        "--plot-only",
-        action="store_true",
-        help="Benchmark solvers: FGBuster, JAX LBFGS, and JAX TNC",
-    )
-    parser.add_argument(
         "-c",
         "--cache-run",
         action="store_true",
@@ -405,101 +361,80 @@ def main():
     jax_timer = JaxTimer(save_jaxpr=True)
     np_timer = NumpyTimer()
 
-    if not args.plot_only:
-        for nside in args.nsides:
-            sky = "c1d0s0"
-            save_to_cache(nside, sky=sky, noise_ratio=0.0)
+    for nside in args.nsides:
+        sky = "c1d0s0"
+        save_to_cache(nside, sky=sky, noise_ratio=0.0)
 
-            if args.cache_run:
-                continue
+        if args.cache_run:
+            continue
 
-            nu, freq_maps = load_from_cache(nside, sky=sky, noise_ratio=0.0)
+        nu, freq_maps = load_from_cache(nside, sky=sky, noise_ratio=0.0)
 
-            for cluster_count in args.clusters:
-                # Solver mode benchmarking
-                info(f"Running solver benchmarking for nside={nside}...")
+        for cluster_count in args.clusters:
+            # Solver mode benchmarking
+            info(f"Running solver benchmarking for nside={nside}...")
 
-                # Run FGBuster with configurable solver
-                if args.fgbuster_solver.lower() != "skip":
-                    final_params, cmb_variance, last_L = run_fg_buster(
-                        nside,
-                        cluster_count,
-                        freq_maps,
-                        dust_nu0,
-                        synchrotron_nu0,
-                        np_timer,
-                        args.max_iter,
-                        args.tol,
-                        args.fgbuster_solver,
-                        instrument,
-                        args.noise,
-                        args.n_sims,
-                    )
-                    data = {
-                        "cmb_variance": cmb_variance,
-                        "last_L": last_L,
-                    }
-                    data.update(**final_params)
-                    kwargs = {
-                        "function": f"FGBuster-{args.fgbuster_solver} n={nside}",
-                        "precision": "float64",
-                        "x": cluster_count,
-                        "y": 1,
-                        "z": 1,
-                        "npz_data": data,
-                    }
-                    np_timer.report("runs/CLUSTERS_FGBUSTER.csv", **kwargs)
+            # Run FGBuster with configurable solver
+            if args.fgbuster_solver.lower() != "skip":
+                final_params, cmb_variance, last_L = run_fg_buster(
+                    nside,
+                    cluster_count,
+                    freq_maps,
+                    dust_nu0,
+                    synchrotron_nu0,
+                    np_timer,
+                    args.max_iter,
+                    args.tol,
+                    args.fgbuster_solver,
+                    "LiteBIRD",  # Instrument name for FGBuster
+                    args.noise,
+                    args.n_sims,
+                )
+                data = {
+                    "cmb_variance": cmb_variance,
+                    "last_L": last_L,
+                }
+                data.update(**final_params)
+                kwargs = {
+                    "function": f"FGBuster-{args.fgbuster_solver} n={nside}",
+                    "precision": "float64",
+                    "x": cluster_count,
+                    "y": 1,
+                    "z": 1,
+                    "npz_data": data,
+                }
+                np_timer.report("runs/CLUSTERS_FGBUSTER.csv", **kwargs)
 
-                # Run JAX with configurable solver
-                if args.jax_solver.lower() != "skip":
-                    final_params, cmb_variance, last_L = run_jax_minimize(
-                        nside,
-                        cluster_count,
-                        freq_maps,
-                        nu,
-                        dust_nu0,
-                        synchrotron_nu0,
-                        jax_timer,
-                        args.max_iter,
-                        args.tol,
-                        args.jax_solver,
-                        args.precondition,
-                        instrument,
-                        args.noise,
-                        args.n_sims,
-                    )
-                    data = {
-                        "cmb_variance": cmb_variance,
-                        "last_L": last_L,
-                    }
-                    data.update(**final_params)
-                    kwargs = {
-                        "function": f"Furax-{args.jax_solver} n={nside}",
-                        "precision": "float64",
-                        "x": cluster_count,
-                        "npz_data": data,
-                    }
-                    jax_timer.report("runs/CLUSTERS_FURAX.csv", **kwargs)
-
-    # Plot solver results
-    if not args.cache_run and args.plot_only:
-        plt.rcParams.update({"font.size": 15})
-        sns.set_context("paper")
-
-        csv_file = ["runs/CLUSTERS_FGBUSTER.csv", "runs/CLUSTERS_FURAX.csv"]
-        # Note: Update solvers list to match actual benchmarked configurations
-        solvers = [
-            f"Furax-{args.jax_solver} n=32",
-            f"FGBuster-{args.fgbuster_solver} n=32",
-        ]
-
-        plot_weak_scaling(
-            csv_files=csv_file,
-            functions=solvers,
-            figure_size=(12, 8),
-            label_text="%f%",
-            output="runs/CLUSTERS_FGBUSTER_FURAX.png",
-        )
+            # Run JAX with configurable solver
+            if args.jax_solver.lower() != "skip":
+                final_params, cmb_variance, last_L = run_jax_minimize(
+                    nside,
+                    cluster_count,
+                    freq_maps,
+                    nu,
+                    dust_nu0,
+                    synchrotron_nu0,
+                    jax_timer,
+                    args.max_iter,
+                    args.tol,
+                    args.jax_solver,
+                    args.precondition,
+                    "LiteBIRD",  # Instrument name for Furax
+                    args.noise,
+                    args.n_sims,
+                )
+                data = {
+                    "cmb_variance": cmb_variance,
+                    "last_L": last_L,
+                }
+                data.update(**final_params)
+                kwargs = {
+                    "function": f"Furax-{args.jax_solver} n={nside}",
+                    "precision": "float64",
+                    "x": cluster_count,
+                    "npz_data": data,
+                }
+                jax_timer.report("runs/CLUSTERS_FURAX.csv", **kwargs)
 
 
 if __name__ == "__main__":

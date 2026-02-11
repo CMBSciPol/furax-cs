@@ -10,7 +10,6 @@ dependencies = [
   "furax",
   "healpy",
   "jax-healpy",
-  "jax_hpc_profiler",
   "jax-grid-search>=0.2.0",
   "optax",
   "camb",
@@ -31,8 +30,9 @@ version = "0.1.0"
 
 [project.optional-dependencies]
 all = [
-  "furax-cs[plotting,dev]"
+  "furax-cs[plotting,dev,benchmarks]"
 ]
+benchmarks = ["jax-hpc-profiler>=v0.3.2"]
 dev = [
   "ruff",
   "pre-commit",
