@@ -34,9 +34,7 @@ import jax
 import jax.numpy as jnp
 
 # Furax imports
-import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 
 # Healpy and PySM3 imports
 # FGBuster imports
@@ -61,11 +59,16 @@ except ImportError:
 from furax import HomothetyOperator
 from furax.obs import negative_log_likelihood
 from furax.obs.landscapes import Stokes
-from furax_cs.data.generate_maps import load_from_cache, save_to_cache
+from furax_cs import load_from_cache, minimize, save_to_cache
 from furax_cs.logging_utils import info
-from furax_cs.optim import minimize
-from jax_hpc_profiler import JaxTimer, NumpyTimer
-from jax_hpc_profiler.plotting import plot_weak_scaling
+
+try:
+    from jax_hpc_profiler import JaxTimer, NumpyTimer
+except ImportError:
+    raise ImportError(
+        "jax_hpc_profiler is required for benchmark scripts. Install with:\n"
+        "  pip install furax-cs[benchmarks]"
+    ) from None
 
 jax.config.update("jax_enable_x64", True)
 
@@ -298,12 +301,6 @@ def parse_args():
         help="Benchmark solvers: FGBuster, JAX LBFGS, and JAX TNC",
     )
     parser.add_argument(
-        "-p",
-        "--plot-only",
-        action="store_true",
-        help="Benchmark solvers: FGBuster, JAX LBFGS, and JAX TNC",
-    )
-    parser.add_argument(
         "-c",
         "--cache-run",
         action="store_true",
@@ -363,7 +360,7 @@ def main():
     jax_timer = JaxTimer(save_jaxpr=False)  # For JAX/FURAX functions
     numpy_timer = NumpyTimer()  # For NumPy/FGBuster functions
 
-    if args.likelihood and not args.plot_only:
+    if args.likelihood:
         for nside in args.nsides:
             save_to_cache(nside, sky="c1d0s0", noise_ratio=args.noise)
 
@@ -384,7 +381,7 @@ def main():
             kwargs = {"function": "FGBuster LL", "precision": "float64", "x": nside}
             numpy_timer.report("runs/LL_FGBUSTER.csv", **kwargs)
 
-    if args.solvers and not args.plot_only:
+    if args.solvers:
         for nside in args.nsides:
             save_to_cache(nside, sky="c1d1s1", noise_ratio=args.noise)
 
@@ -430,42 +427,6 @@ def main():
                 "x": nside,
             }
             jax_timer.report("runs/BCP_FURAX.csv", **kwargs)
-
-    # Plot log-likelihood results
-    if args.likelihood and not args.cache_run and args.plot_only:
-        plt.rcParams.update({"font.size": 15})
-        sns.set_context("paper")
-
-        csv_file = ["runs/LL_FURAX.csv", "runs/LL_FGBUSTER.csv"]
-        FWs = ["Furax LL", "FGBuster LL"]
-
-        plot_weak_scaling(
-            csv_files=csv_file,
-            functions=FWs,
-            figure_size=(12, 8),
-            label_text="%f%",
-            output="runs/nll.png",
-        )
-
-    # Plot solver results
-    if args.solvers and not args.cache_run and args.plot_only:
-        plt.rcParams.update({"font.size": 15})
-        sns.set_context("paper")
-
-        csv_file = ["runs/BCP_FGBUSTER.csv", "runs/BCP_FURAX.csv"]
-        # Note: Update solvers list to match actual benchmarked configurations
-        solvers = [
-            f"Furax-{args.jax_solver}",
-            f"FGBuster-{args.fgbuster_solver}",
-        ]
-
-        plot_weak_scaling(
-            csv_files=csv_file,
-            functions=solvers,
-            figure_size=(12, 8),
-            label_text="%f%",
-            output="runs/solvers.png",
-        )
 
 
 if __name__ == "__main__":

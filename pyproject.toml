@@ -10,7 +10,6 @@ dependencies = [
   "furax",
   "healpy",
   "jax-healpy",
-  "jax_hpc_profiler",
   "jax-grid-search>=0.2.0",
   "optax",
   "camb",
@@ -27,12 +26,13 @@ license = {file = "LICENSE"}
 name = "furax-cs"
 readme = "README.md"
 requires-python = ">=3.11"
-version = "0.1.0"
+version = "0.1.1"
 
 [project.optional-dependencies]
 all = [
-  "furax-cs[plotting,dev]"
+  "furax-cs[plotting,dev,benchmarks]"
 ]
+benchmarks = ["jax-hpc-profiler>=v0.3.2"]
 dev = [
   "ruff",
   "pre-commit",

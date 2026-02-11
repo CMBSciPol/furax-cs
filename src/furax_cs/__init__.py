@@ -4,6 +4,7 @@ from importlib import metadata
 
 from . import r_analysis
 from .data import (
+    MASK_CHOICES,
     CMBLensedWithTensors,
     dump_default_search_space,
     generate_custom_cmb,
@@ -61,6 +62,7 @@ __all__ = [
     "search_space_to_jax",
     "simulate_D_from_params",
     "validate_search_space",
+    "MASK_CHOICES",
     # Optim
     "SOLVER_NAMES",
     "ScipyMinimizeState",

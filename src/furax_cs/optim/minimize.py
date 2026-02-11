@@ -195,6 +195,7 @@ def minimize(
     upper_bound: Optional[PyTree[Float[Array, " P"]]] = None,
     precondition: bool = False,
     solver_options: dict[str, Any] = {},
+    refresh_steps: int = 10,
     **fn_kwargs: Any,
 ) -> tuple[PyTree[Float[Array, " P"]], UnifiedState]:
     """
@@ -267,14 +268,21 @@ def minimize(
         def optx_fn(y, fn_kwargs):
             return fn(y, **fn_kwargs)
 
+        # Does optax have TqdmProgressMeter? defined?
+        if not hasattr(optx, "TqdmProgressMeter"):
+            kwargs = {}
+            warning("optx.TqdmProgressMeter not found. Progress meter disabled.")
+        else:
+            kwargs = {"progress_meter": optx.TqdmProgressMeter(refresh_steps=refresh_steps)}
+
         sol = optx.minimise(
             optx_fn,
             solver,
             init_params,
             max_steps=max_iter,
-            progress_meter=optx.TqdmProgressMeter(refresh_steps=10),
             throw=False,
             args=fn_kwargs,
+            **kwargs,
         )
 
         unified_state = UnifiedState(
