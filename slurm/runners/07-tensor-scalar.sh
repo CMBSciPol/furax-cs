@@ -4,15 +4,15 @@
 # Collect all job IDs here
 job_ids=()
 BATCH_PARAMS="--account=nih@h100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C h100 --time=05:00:00 --parsable"
-OUTPUT_DIR="RESULTS/RUNS/TENSOR_TO_SCALAR_34"
+OUTPUT_DIR="RESULTS/TENSOR_TO_SCALAR_34"
 
 echo "=== Running Tensor-to-Scalar Runs (Redo) ==="
 
 # Common Parameters
-NS=10
-NR=0.2
+NS=40
+NR=0.3
 MASK="ALL"
-SOLVER="ADABK0"
+SOLVER="ADABK2"
 MAX_ITER=2000
 INSTRUMENT="LiteBIRD"
 NSIDE=64

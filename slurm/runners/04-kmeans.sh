@@ -4,7 +4,8 @@
 # Collect all kmeans job IDs here
 job_ids=()
 BATCH_PARAMS='--account=nih@a100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C a100 --time=05:00:00 --parsable'
-BATCH_PARAMS="--account=nih@h100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C h100 --time=05:00:00 --parsable"
+BATCH_PARAMS="--account=rzt@v100 --nodes=1 --gres=gpu:1 --tasks-per-node=1 -C v100-32g --time=05:00:00 --parsable"
+SKY=c1d0s0
 # Define the 5 sets of parameters to run
 # Format: "B_DUST T_DUST B_SYNC VARYING_PARAM"
 # VARYING_PARAM key: 1=B_DUST, 2=T_DUST, 3=B_SYNC
@@ -43,7 +44,7 @@ for config in "${CONFIGS[@]}"; do
         OUTPUT_BASE="BD${B_DUST_BASE}_TD${T_DUST_BASE}_BSXXX"
     fi
 
-    OUTPUT_DIR="RESULTS/KMEANS/$OUTPUT_BASE"
+    OUTPUT_DIR="RESULTS/KMEANS_C1D0S0/$OUTPUT_BASE"
     current_job_ids=()
 
     echo "=== Running Configuration: $OUTPUT_BASE (Varying $VARY_NAME) ==="
@@ -62,13 +63,13 @@ for config in "${CONFIGS[@]}"; do
 
         # Submit jobs for 3 masks
         for MASK in GAL020 GAL040 GAL060; do
-             NAME="kmeans_c1d1s1_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
+             NAME="kmeans_${SKY}_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
              if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
                  jid=$(sbatch $BATCH_PARAMS --job-name=${JOB_NAME}_${MASK} \
                     $SLURM_SCRIPT $OUTPUT_DIR \
                     kmeans-model -n 64 -ns 10 -nr 1.0 \
                     -pc $B_DUST $T_DUST $B_SYNC \
-                    -tag c1d1s1 -m $MASK -i LiteBIRD \
+                    -tag ${SKY} -m $MASK -i LiteBIRD \
                     -s $SOLVER -mi 2000 \
                     --name $NAME -o $OUTPUT_DIR)
                  current_job_ids+=("$jid")
@@ -82,9 +83,9 @@ for config in "${CONFIGS[@]}"; do
     deps=$(IFS=:; echo "${current_job_ids[*]}")
     
     # Construct regex for r_analysis
-    if [ "$VARY_IDX" -eq 1 ]; then REGEX="kmeans_c1d1s1_BD(\d+)_TD${T_DUST}_BS${B_SYNC}"; fi
-    if [ "$VARY_IDX" -eq 2 ]; then REGEX="kmeans_c1d1s1_BD${B_DUST}_TD(\d+)_BS${B_SYNC}"; fi
-    if [ "$VARY_IDX" -eq 3 ]; then REGEX="kmeans_c1d1s1_BD${B_DUST}_TD${T_DUST}_BS(\d+)"; fi
+    if [ "$VARY_IDX" -eq 1 ]; then REGEX="kmeans_${SKY}_BD(\d+)_TD${T_DUST}_BS${B_SYNC}"; fi
+    if [ "$VARY_IDX" -eq 2 ]; then REGEX="kmeans_${SKY}_BD${B_DUST}_TD(\d+)_BS${B_SYNC}"; fi
+    if [ "$VARY_IDX" -eq 3 ]; then REGEX="kmeans_${SKY}_BD${B_DUST}_TD${T_DUST}_BS(\d+)"; fi
 
     if [ -n "$deps" ]; then
         sbatch --dependency=afterany:$deps \
