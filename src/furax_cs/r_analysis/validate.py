@@ -90,7 +90,7 @@ def compute_gradient_validation(
     """
 
     # 1. Construct Noise Operator & Data
-    N = NoiseDiagonalOperator(small_n, _in_structure=noised_d.structure)
+    N = NoiseDiagonalOperator(small_n, in_structure=noised_d.structure)
 
     # 2. Define Likelihood Functions
     dust_nu0 = 150.0
@@ -255,7 +255,7 @@ def compute_2d_validation(
         noised_d = get_cutout_from_mask(noised_d, mask_indices, axis=-1)
 
     # 1. Setup Noise & Likelihood (Same as 1D)
-    N = NoiseDiagonalOperator(small_n, _in_structure=noised_d.structure)
+    N = NoiseDiagonalOperator(small_n, in_structure=noised_d.structure)
 
     dust_nu0 = 150.0
     synchrotron_nu0 = 20.0

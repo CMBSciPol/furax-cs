@@ -257,6 +257,18 @@ EXAMPLES:
         default=None,
         help="Override the default output folder name.",
     )
+    parser.add_argument(
+        "--atol",
+        type=float,
+        default=1e-18,
+        help="Absolute tolerance for optimizer convergence",
+    )
+    parser.add_argument(
+        "--rtol",
+        type=float,
+        default=1e-16,
+        help="Relative tolerance for optimizer convergence",
+    )
     return parser.parse_args()
 
 
@@ -391,8 +403,8 @@ def main():
                 init_params=guess_params,
                 solver_name=args.solver,
                 max_iter=args.max_iter,
-                atol=1e-18,
-                rtol=1e-18,
+                atol=args.atol,
+                rtol=args.rtol,
                 lower_bound=lower_bound_tree,
                 upper_bound=upper_bound_tree,
                 precondition=args.cond,

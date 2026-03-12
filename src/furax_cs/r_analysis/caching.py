@@ -58,7 +58,7 @@ def compute_w(
 
     guess_params = jax.tree.map(lambda v, c: jnp.full((c,), v), base_params, max_count)
 
-    N = HomothetyOperator(1.0, _in_structure=d.structure)
+    N = HomothetyOperator(1.0, in_structure=d.structure)
 
     negative_log_likelihood_fn = partial(
         negative_log_likelihood,

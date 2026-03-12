@@ -9,7 +9,7 @@ CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
 QOS=""
-TIME_LIMIT="08:00:00"
+TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
     --gres=gpu:$GPUS_PER_NODE --cpus-per-task=$CPUS_PER_TASK \
@@ -49,23 +49,47 @@ submit_job() {
 }
 
 # =============================================================================
-# Run Benchmarks  (bench-clusters uses --tol, not --rtol/--atol)
+# Configuration
 # =============================================================================
 
-# 1. FGBuster (TNC)
-# submit_job BENCH_FGB "" BENCH bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 --fgbuster-solver TNC --noise 1.0
+RTOL=1e-16
+ATOL=1e-18
 
-# 2. ADABK5 (Top K = 0.5)
-submit_job BENCH_ADA5 "" BENCH \
-    bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 \
-    --jax-solver ADABK5 --noise 1.0 --tol 1e-16 --n-sims 20
+OUTPUT_DIR="RESULTS/NOISE_MODEL"
+MASK="ALL-GALACTIC"
+INSTRUMENT="LiteBIRD"
+NSIDE=64
+NS=20
+NR=1.0
+SOLVER="optax_lbfgs"
+MAX_ITER=2000
 
-# 3. ADABK0 (Top K = 0.0)
-submit_job BENCH_ADA0 "" BENCH \
-    bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 \
-    --jax-solver ADABK0 --noise 1.0 --tol 1e-16 --n-sims 20
+# =============================================================================
+# Noise model validation: vary true patch counts (-tp)
+# =============================================================================
+# Format: "B_DUST T_DUST B_SYNC"
+TRUE_PATCH_CONFIGS=(
+    "10 5 5"
+    "50 5 10"
+    "100 5 15"
+    "200 10 20"
+    "500 20 50"
+)
 
-# 4. Conditioned AdaBelief Active Set
-submit_job BENCH_ADAC "" BENCH \
-    bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 \
-    --jax-solver adabelief --precondition --noise 1.0 --tol 1e-16 --n-sims 20
+job_ids=()
+
+for tp_config in "${TRUE_PATCH_CONFIGS[@]}"; do
+    read -r TP_BD TP_TD TP_BS <<< "$tp_config"
+    JOB_NAME="NOISE_BD${TP_BD}_TD${TP_TD}_BS${TP_BS}"
+
+    jid=$(submit_job "$JOB_NAME" "" NOISE \
+        noise-model -n $NSIDE -ns $NS -nr $NR \
+        -m $MASK -i $INSTRUMENT \
+        -s $SOLVER -mi $MAX_ITER \
+        -tp $TP_BD $TP_TD $TP_BS \
+        --rtol $RTOL --atol $ATOL \
+        -o $OUTPUT_DIR)
+    job_ids+=("$jid")
+done
+
+echo "Submitted ${#job_ids[@]} noise-model jobs."
