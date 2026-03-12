@@ -30,7 +30,7 @@ version = "0.1.1"
 
 [project.optional-dependencies]
 all = [
-  "furax-cs[plotting,dev,benchmarks]"
+  "furax-cs[plotting,dev,benchmarks,io]"
 ]
 benchmarks = ["jax-hpc-profiler>=v0.3.2"]
 dev = [
@@ -39,6 +39,7 @@ dev = [
   "jupyter",
   "pytest"
 ]
+io = ["datasets", "Pillow"]
 plotting = [
   "matplotlib",
   "seaborn",

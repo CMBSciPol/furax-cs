@@ -1,3 +1,6 @@
+import re
+
+import datasets
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
 from furax_cs.data.instruments import get_instrument
@@ -14,9 +17,7 @@ from .plotting import (
 )
 from .r_estimate import run_estimate
 from .run_grep import run_grep
-from .snapshot import (
-    run_snapshot,
-)
+from .snapshot import run_snapshot
 from .validate import run_validate
 
 out_folder = "plots/"
@@ -47,69 +48,83 @@ def run_analysis() -> int | None:
             output_format=args.output_format,
         )
 
-    # For other subcommands, get common arguments
-    nside = args.nside
-    instrument = get_instrument(args.instrument)
-    if args.no_tex:
-        plt.rcParams["text.usetex"] = False
+    # run_grep only needed for snap/validate subcommands
+    matched_results = None
+    nside = None
+    instrument = None
+    if args.subcommand in ("snap", "validate"):
+        nside = args.nside
+        instrument = get_instrument(args.instrument)
+        if args.no_tex:
+            plt.rcParams["text.usetex"] = False
 
-    # Grep results using the new consolidated function
-    matched_results = run_grep(
-        result_folders=args.input_results_dir,
-        run_specs=args.runs,
-    )
-    if len(matched_results) == 0:
-        error("No results matched the provided run specifications. Exiting.")
-        return
+        matched_results = run_grep(
+            result_folders=args.input_results_dir,
+            run_specs=args.runs,
+        )
+        if len(matched_results) == 0:
+            error("No results matched the provided run specifications. Exiting.")
+            return
 
-    # Dispatch to subcommand handler
     if args.subcommand == "snap":
-        flags = get_compute_flags(args, snapshot_mode=True)  # compute everything
+        assert matched_results is not None, "matched_results should be set for snap subcommand"
+        assert (
+            nside is not None and instrument is not None
+        ), "nside and instrument should be set for snap subcommand"
+        flags = get_compute_flags(args, snapshot_mode=True)
         return run_snapshot(
             matched_results,
             nside,
             instrument,
-            args.output_snapshot,
+            args.output_dir,
             flags,
             args.max_iterations,
             args.solver,
             noise_selection=args.noise_selection,
             sky_tag=args.sky,
+            skip_images=args.no_images,
         )
 
     if args.subcommand == "plot":
-        # Handle titles: if regex expanded to different number of groups, use expanded names
-        titles = args.titles
-        if not titles or len(titles) != len(matched_results):
-            if titles and len(titles) != len(matched_results):
-                warning(
-                    f"Got {len(matched_results)} result groups but {len(titles)} titles. "
-                    f"Using expanded pattern names as titles."
-                )
-            titles = list(matched_results.keys())
+        from pathlib import Path
 
-        flags = get_compute_flags(args, snapshot_mode=False)
+        if args.no_tex:
+            plt.rcParams["text.usetex"] = False
+
+        parquet_dir = Path(args.parquet_dir)
+        all_parquets = sorted(parquet_dir.glob("*.parquet"))
+        if not all_parquets:
+            error(f"No parquet files found in {args.parquet_dir}")
+            return
+
+        data_files = [str(p) for p in all_parquets]
+
+        ds = datasets.load_dataset(
+            "parquet",
+            data_files=data_files,
+            split="train",
+            streaming=True,
+        ).with_format("numpy")
+
+        if args.runs:
+            patterns = args.runs
+            ds = ds.filter(lambda x: any(re.search(pat, str(x["kw"])) for pat in patterns))
         indiv_flags, aggregate_flags = get_plot_flags(args)
         return run_plot(
-            matched_results,
-            titles,
-            nside,
-            instrument,
-            args.snapshot,
-            flags,
+            ds,
             indiv_flags,
             aggregate_flags,
-            args.solver,
-            args.max_iterations,
             args.output_format,
             args.font_size,
             output_dir=args.output,
-            noise_selection=args.noise_selection,
-            sky_tag=args.sky,
         )
 
     if args.subcommand == "validate":
         # Handle titles: if regex expanded to different number of groups, use expanded names
+        assert matched_results is not None, "matched_results should be set for validate subcommand"
+        assert (
+            nside is not None and instrument is not None
+        ), "nside and instrument should be set for validate subcommand"
         titles = args.titles
         if not titles or len(titles) != len(matched_results):
             if titles and len(titles) != len(matched_results):

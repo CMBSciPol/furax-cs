@@ -113,10 +113,10 @@ ARGUMENT NOTES:
     )
     parser_snap.add_argument(
         "-o",
-        "--output-snapshot",
+        "--output-dir",
         type=str,
         required=True,
-        help="Directory/File to save the computed snapshot data",
+        help="Directory to save the computed parquet files",
     )
     parser_snap.add_argument(
         "--noise-selection",
@@ -124,20 +124,51 @@ ARGUMENT NOTES:
         default="min-value",
         help="Noise realization selection for plotting: 'min-value' (default), 'min-nll', or an integer index.",
     )
+    parser_snap.add_argument(
+        "--no-images",
+        action="store_true",
+        help="Skip rendering mollview PIL images into the parquet (faster snap)",
+    )
 
     # ==========================================
     # 2. PLOT SUBCOMMAND
     # ==========================================
+    # Minimal parent parser for plot (no -r/-ird/-n/--sky/-mi/-s needed)
+    plot_common_parser = argparse.ArgumentParser(add_help=False)
+    plot_common_parser.add_argument(
+        "-i",
+        "--instrument",
+        type=str,
+        default="LiteBIRD",
+        choices=["LiteBIRD", "Planck", "default"],
+        help="Instrument to use",
+    )
+    plot_common_parser.add_argument(
+        "--no-tex", action="store_true", help="Disable LaTeX rendering for plot text"
+    )
+
     parser_plot = subparsers.add_parser(
-        "plot", parents=[common_parser], help="Generate plots from results or snapshots"
+        "plot", parents=[plot_common_parser], help="Generate plots from parquet snapshots"
     )
 
     # Input/Output for plotting
     parser_plot.add_argument(
-        "--snapshot",
+        "--parquet-dir",
         type=str,
-        help="Load data from this snapshot instead of recomputing",
-        default="SNAPSHOT",
+        required=True,
+        help="Directory containing .parquet snapshot files produced by 'snap'",
+    )
+    parser_plot.add_argument(
+        "-r",
+        "--runs",
+        type=str,
+        nargs="*",
+        default=None,
+        help=(
+            "Optional regex patterns to filter parquet files by keyword (stem). "
+            "Only parquets whose filename stem matches any pattern are loaded. "
+            "If omitted, all parquets in --parquet-dir are loaded."
+        ),
     )
     parser_plot.add_argument(
         "-o", "--output", type=str, help="Output directory for plots", default="plots/"
@@ -154,15 +185,6 @@ ARGUMENT NOTES:
         type=int,
         default=14,
         help="Font size for plots",
-    )
-    parser_plot.add_argument(
-        "--noise-selection",
-        type=str,
-        default="min-value",
-        help="Noise realization selection for plotting: 'min-value' (default), 'min-nll', or an integer index.",
-    )
-    parser_plot.add_argument(
-        "-t", "--titles", type=str, nargs="*", help="List of titles for the plots", default=None
     )
 
     # Visualization Toggles
