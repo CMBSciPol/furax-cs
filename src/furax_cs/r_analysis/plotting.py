@@ -8,16 +8,14 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import scienceplots  # noqa: F401 # pyright: ignore[reportUnusedImport]
-from furax._instruments.sky import FGBusterInstrument
 from furax.obs.stokes import Stokes
 from jaxtyping import Array, Float, Int
 from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
 from tqdm.auto import tqdm
 
-from ..logging_utils import error, hint, info, success, warning
-from .compute import compute_all
-from .snapshot import load_and_filter_snapshot, serialize_snapshot_payload
+from ..logging_utils import info, success, warning
+from .snapshot import CompSepResult, _result_to_plot_dict
 
 plt.style.use("science")
 
@@ -2027,21 +2025,12 @@ def plot_aggregate_results(
 
 
 def run_plot(
-    matched_results: dict[str, Any],
-    titles: list[str],
-    nside: int,
-    instrument: FGBusterInstrument,
-    snapshot_path: str,
-    flags: dict[str, bool],
+    results: "datasets.IterableDataset",
     indiv_flags: dict[str, bool],
     aggregate_flags: dict[str, bool],
-    solver_name: str,
-    max_iter: int,
     output_format: str,
     font_size: int,
     output_dir: str,
-    noise_selection: str = "min-value",
-    sky_tag: str = "c1d0s0",
 ) -> int:
     if not output_dir:
         output_dir = "plots"
@@ -2049,57 +2038,29 @@ def run_plot(
     if output_format != "show":
         os.makedirs(output_dir, exist_ok=True)
 
-    if len(titles) != len(matched_results):
-        error("Number of titles does not match number of existing results.")
-        return -1
+    set_font_size(font_size)
 
-    existing, to_compute = load_and_filter_snapshot(snapshot_path, matched_results)
+    names: list[str] = []
+    kw_to_plot: dict[str, Any] = {}
 
-    if to_compute:
-        warning(f"{len(to_compute)} run groups are not in the snapshot.")
-        hint(
-            "Consider running 'r_analysis snap ...' to cache these results "
-            "for faster plotting next time."
-        )
-        computed = compute_all(
-            to_compute,
-            nside,
-            instrument,
-            flags,
-            max_iter,
-            solver_name,
-            noise_selection=noise_selection,
-            sky_tag=sky_tag,
-        )
-        # Serialize computed results for snapshot storage
-        serialized_computed = {kw: serialize_snapshot_payload(res) for kw, res in computed.items()}
-        existing.update(serialized_computed)
-
-    for name, (kw, computed_results) in tqdm(
-        zip(titles, existing.items()),
-        desc="Generating per group plots",
-        leave=False,
-    ):
-        plot_subfolder = kw
-        if kw in matched_results:
-            # matched_results[kw] is (folders, index_spec, root_dir)
-            root_dir = matched_results[kw][2]
-            if root_dir:
-                plot_subfolder = os.path.join(root_dir, kw)
-
+    for row in tqdm(results, desc="Generating per-group plots"):
+        result = CompSepResult.from_dataset(row)
+        plot_dict = _result_to_plot_dict(result)
         plot_indiv_results(
-            name,
-            computed_results,
+            result.title,
+            plot_dict,
             indiv_flags,
             output_format,
             output_dir=output_dir,
-            subfolder=plot_subfolder,
+            subfolder=result.kw,
         )
         plt.close("all")
+        names.append(result.title)
+        kw_to_plot[result.kw] = plot_dict
 
     plot_aggregate_results(
-        titles,
-        existing,
+        names,
+        kw_to_plot,
         aggregate_flags,
         output_format,
         output_dir=output_dir,

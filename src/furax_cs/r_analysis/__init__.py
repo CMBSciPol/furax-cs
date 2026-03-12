@@ -17,6 +17,7 @@ from .residuals import (
     compute_systematic_res,
     compute_total_res,
 )
+from .snapshot import CLData, CMBData, CompSepResult, ParamData, ResidualData, REstimate
 from .utils import params_to_maps
 
 __all__ = [
@@ -33,4 +34,10 @@ __all__ = [
     "plot_all_cmb",
     "plot_all_r_estimation",
     "params_to_maps",
+    "CompSepResult",
+    "CMBData",
+    "CLData",
+    "REstimate",
+    "ResidualData",
+    "ParamData",
 ]
