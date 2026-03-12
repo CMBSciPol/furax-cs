@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import time
 from collections import OrderedDict
 from typing import Any, Union
 
@@ -165,6 +166,7 @@ def _compute_single_folder(
         Dictionary with computed data for this folder/index, or None if failed.
         Keys include: cmb_recon, cmb_true, mask, indices, NLL, wd, params, patches,
     """
+    info(f"Processing folder '{folder}' for run index {run_index}")
     # Load data
     results_path = f"{folder}/results.npz"
     best_params_path = f"{folder}/best_params.npz"
@@ -200,6 +202,7 @@ def _compute_single_folder(
     if flags["compute_syst"]:
         cache_key = f"W_D_FG_{run_index}"
         if cache_key in full_results:
+            info(f"Systematics cached for index {run_index}. Loading from cache...")
             cached_w = full_results[cache_key]
             wd = Stokes.from_stokes(Q=cached_w[0], U=cached_w[1])
         else:
@@ -213,6 +216,7 @@ def _compute_single_folder(
                 "beta_pl_patches": run_data["beta_pl_patches"],
                 "temp_dust_patches": run_data["temp_dust_patches"],
             }
+            t0_w = time.perf_counter()
             wd = compute_w(
                 nu=instrument.frequency,
                 d=fg_map,
@@ -220,6 +224,7 @@ def _compute_single_folder(
                 max_iter=max_iter,
                 solver_name=solver_name,
             )
+            info(f"  compute_w for index {run_index} took {time.perf_counter() - t0_w:.2f}s")
             # Persist to results.npz for future runs
             W_numpy = np.stack([wd.q, wd.u], axis=0)
             full_results[cache_key] = W_numpy
@@ -240,6 +245,7 @@ def _compute_single_folder(
             "beta_pl": run_data.get("beta_pl"),
         }
 
+    info(f"Finished processing folder '{folder}' for run index {run_index}")
     # Extract validation curves if needed
     return {
         "cmb_recon": cmb_recon,
