@@ -55,9 +55,9 @@ submit_job() {
 RTOL=1e-16
 ATOL=1e-18
 
-SKY=c1d0s0
+SKY=c1d1s1
 SOLVER="ADABK0"
-OUTPUT_DIR="RESULTS/KMEANS_C1D0S0"
+OUTPUT_DIR="RESULTS/KMEANS_C1D1S1"
 
 CONFIGS=(
     "4000 10 0 3"    # Case 1: B_DUST=4000, T_DUST=10, Vary B_SYNC
@@ -78,20 +78,45 @@ RANGE_HIGH="50 100 200 300 500 1000 1500 2000 2500 3000 3500 4000 4500 5000 5500
 
 job_ids=()
 
+# =============================================================================
+# Static 1 1 1 run
+# =============================================================================
+
+RUN_OUTPUT_DIR_111="$OUTPUT_DIR/BD1_TD1_BS1"
+static_job_ids=()
+
+for MASK in GAL020 GAL040 GAL060; do
+    NAME="kmeans_${SKY}_BD1_TD1_BS1_${MASK}"
+    if [ ! -f "$RUN_OUTPUT_DIR_111/$NAME/best_params.npz" ]; then
+        jid=$(submit_job "KM_1_1_1_${MASK}" "" KMEANS \
+            kmeans-model -n 64 -ns 10 -nr 1.0 \
+            -pc 1 1 1 \
+            -tag ${SKY} -m $MASK -i LiteBIRD \
+            -s $SOLVER -mi 2000 \
+            --rtol $RTOL --atol $ATOL \
+            --name $NAME -o $RUN_OUTPUT_DIR_111)
+        static_job_ids+=("$jid")
+    else
+        echo "Skipping $NAME (already done)"
+    fi
+done
+
+job_ids+=("${static_job_ids[@]}")
+
 for config in "${CONFIGS[@]}"; do
     read -r B_DUST_BASE T_DUST_BASE B_SYNC_BASE VARY_IDX <<< "$config"
 
     if [ "$VARY_IDX" -eq 1 ]; then
         VARY_NAME="B_DUST"
-        RANGE=$RANGE_HIGH
+        RANGE=$RANGE_LOW
         OUTPUT_BASE="BDXXX_TD${T_DUST_BASE}_BS${B_SYNC_BASE}"
     elif [ "$VARY_IDX" -eq 2 ]; then
         VARY_NAME="T_DUST"
-        if [ "$B_DUST_BASE" -eq 4000 ]; then RANGE=$RANGE_LOW; else RANGE=$RANGE_HIGH; fi
+        RANGE=$RANGE_LOW
         OUTPUT_BASE="BD${B_DUST_BASE}_TDXXX_BS${B_SYNC_BASE}"
     elif [ "$VARY_IDX" -eq 3 ]; then
         VARY_NAME="B_SYNC"
-        if [ "$B_DUST_BASE" -eq 4000 ]; then RANGE=$RANGE_LOW; else RANGE=$RANGE_HIGH; fi
+        RANGE=$RANGE_LOW
         OUTPUT_BASE="BD${B_DUST_BASE}_TD${T_DUST_BASE}_BSXXX"
     fi
 

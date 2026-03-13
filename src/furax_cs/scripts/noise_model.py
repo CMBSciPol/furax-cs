@@ -39,10 +39,10 @@ from furax.obs.landscapes import FrequencyLandscape, HealpixLandscape
 from furax.obs.operators import NoiseDiagonalOperator
 from furax_cs import (
     MASK_CHOICES,
-    dump_default_search_space,
+    dump_validation_search_space,
     get_instrument,
     get_mask,
-    load_search_space,
+    load_validation_default_search_space,
     minimize,
     sanitize_mask_name,
 )
@@ -83,13 +83,6 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Noise ratio",
-    )
-    parser.add_argument(
-        "-tag",
-        "--tag",
-        type=str,
-        default="noise_validation",
-        help="Tag for the observation",
     )
     parser.add_argument(
         "-m",
@@ -214,13 +207,13 @@ def main():
 
     # Handle dump mode: save default search space and exit
     if args.dump_search_space is not None:
-        dump_default_search_space(args.dump_search_space)
+        dump_validation_search_space(args.dump_search_space)
         success(f"\nSearch space template saved to: {args.dump_search_space}")
         info("You can now customize this file and use it with --search-space option.")
         return
 
     config = f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
-    out_folder = f"{args.output}/noise_validation_{args.tag}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
+    out_folder = f"{args.output}/noise_validation_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
 
     if args.clean_up is not None:
         clean_up(args.clean_up)
@@ -310,8 +303,8 @@ def main():
         info(f"Loading custom search space from: {args.search_space}")
         search_space = load_search_space(args.search_space)
     else:
-        info("Using default search space configuration")
-        search_space = load_search_space()
+        info("Using noise validation search space configuration")
+        search_space = load_validation_default_search_space()
 
     # Ensure we do not have more patches than pixels
     search_space = jax.tree.map(lambda x: jnp.clip(x, 1, indices.size), search_space)

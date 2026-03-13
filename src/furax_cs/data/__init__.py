@@ -19,7 +19,9 @@ from .generate_maps import (
 from .instruments import get_instrument
 from .search_space import (
     dump_default_search_space,
+    dump_validation_search_space,
     load_search_space,
+    load_validation_default_search_space,
     search_space_to_jax,
     validate_search_space,
 )
@@ -37,8 +39,10 @@ __all__ = [
     "get_mask",
     "get_instrument",
     "load_search_space",
+    "load_validation_default_search_space",
     "search_space_to_jax",
     "dump_default_search_space",
+    "dump_validation_search_space",
     "validate_search_space",
     "sanitize_mask_name",
     "generate_custom_cmb",
