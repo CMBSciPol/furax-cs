@@ -1,31 +1,17 @@
 #!/usr/bin/env python3
 """
-Distributed Grid Search for CMB Component Separation Parameter Optimization
+Noise Model Validation for CMB Component Separation
 
-WARNING: This script performs an exhaustive grid search across different sky regions
-and can take SEVERAL HOURS to complete, especially when running on multiple GPUs.
-Designed for HPC environments with SLURM scheduling.
+This script runs the same grid search as distributed_gridding.py but uses a
+synthetic sky (random normal maps via HealpixLandscape) instead of loading
+cached real maps. It validates that the pipeline correctly handles the noise
+model by checking that the recovered CMB variance behaves as expected.
 
-This script implements distributed grid search optimization to find optimal spectral
-parameters for CMB component separation across different galactic mask zones. It uses
-JAX for GPU acceleration and distributed computing to efficiently explore parameter
-space for dust and synchrotron foreground components.
+Output format is identical to distributed_gridding.py: results.npz,
+best_params.npz, mask.npy.
 
 Usage:
-    python 04-distributed-gridding.py -n 64 -ns 100 -nr 1.0 -tag c1d1s1 -m GAL020 -i LiteBIRD
-
-    # Dump default search space configuration to customize:
-    python 04-distributed-gridding.py --dump-search-space my_search_space.yaml
-
-    # Use custom search space:
-    python 04-distributed-gridding.py -n 64 -ss my_search_space.yaml
-
-Key Features:
-    - Distributed execution across multiple GPUs using JAX
-    - Grid search over dust temperature, dust spectral index, and synchrotron index
-    - Automatic sky region partitioning based on galactic masks
-    - Configurable search space via YAML files
-    - Results saved in structured format for analysis
+    noise-model -n 64 -ns 2 -mi 2 -o /tmp/noise_test
 
 Author: FURAX Team
 """
@@ -34,29 +20,11 @@ import os
 
 os.environ["EQX_ON_ERROR"] = "nan"
 import argparse
+import operator
 from functools import partial
 from typing import Any
 
 import jax
-from jaxtyping import Array, Int
-
-# =============================================================================
-# 1. If running on a distributed system, initialize JAX distributed
-# =============================================================================
-if (
-    int(os.environ.get("SLURM_NTASKS", 0)) > 1
-    or int(os.environ.get("SLURM_NTASKS_PER_NODE", 0)) > 1
-):
-    os.environ["VSCODE_PROXY_URI"] = ""
-    os.environ["no_proxy"] = ""
-    os.environ["NO_PROXY"] = ""
-    del os.environ["VSCODE_PROXY_URI"]
-    del os.environ["no_proxy"]
-    del os.environ["NO_PROXY"]
-    jax.distributed.initialize()
-# =============================================================================
-import operator
-
 import jax.numpy as jnp
 import jax.random
 import numpy as np
@@ -67,35 +35,32 @@ from furax.obs import (
     negative_log_likelihood,
     sky_signal,
 )
-from furax.obs.landscapes import FrequencyLandscape
+from furax.obs.landscapes import FrequencyLandscape, HealpixLandscape
 from furax.obs.operators import NoiseDiagonalOperator
-from furax.obs.stokes import Stokes
 from furax_cs import (
     MASK_CHOICES,
     dump_default_search_space,
     get_instrument,
     get_mask,
-    load_cmb_map,
-    load_fg_map,
-    load_from_cache,
     load_search_space,
     minimize,
     sanitize_mask_name,
 )
+from furax_cs.data.generate_maps import simulate_D_from_params
+from furax_cs.kmeans_clusters import kmeans_clusters
 from furax_cs.logging_utils import info, success
 from jax_grid_search import DistributedGridSearch
 from jax_healpy.clustering import (
-    find_kmeans_clusters,
     get_cutout_from_mask,
-    normalize_by_first_occurrence,
 )
+from jaxtyping import Array, Int
 
 jax.config.update("jax_enable_x64", True)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Benchmark FGBuster and Furax Component Separation Methods"
+        description="Noise Model Validation for CMB Component Separation"
     )
 
     parser.add_argument(
@@ -123,7 +88,7 @@ def parse_args() -> argparse.Namespace:
         "-tag",
         "--tag",
         type=str,
-        default="c1d1s1",
+        default="noise_validation",
         help="Tag for the observation",
     )
     parser.add_argument(
@@ -207,6 +172,14 @@ def parse_args() -> argparse.Namespace:
         help="Output directory for results",
     )
     parser.add_argument(
+        "-tp",
+        "--true-patches",
+        type=int,
+        nargs=3,
+        default=[100, 5, 15],
+        help="True number of patches [beta_dust, temp_dust, beta_pl] used to simulate data",
+    )
+    parser.add_argument(
         "--atol",
         type=float,
         default=1e-18,
@@ -247,7 +220,7 @@ def main():
         return
 
     config = f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
-    out_folder = f"{args.output}/compsep_{args.tag}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
+    out_folder = f"{args.output}/noise_validation_{args.tag}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
 
     if args.clean_up is not None:
         clean_up(args.clean_up)
@@ -290,15 +263,47 @@ def main():
         analytical_gradient=True,
     )
 
-    _, freqmaps = load_from_cache(nside, instrument_name=args.instrument, sky=args.tag)
-    _, fg_maps = load_fg_map(nside, instrument_name=args.instrument, sky=args.tag)
-    cmb_map = load_cmb_map(nside, sky=args.tag)
-    d = Stokes.from_stokes(freqmaps[:, 1], freqmaps[:, 2])
-    fg_stokes = Stokes.from_stokes(fg_maps[:, 1], fg_maps[:, 2])
-    cmb_map_stokes = Stokes.from_stokes(cmb_map[1], cmb_map[2])
-    masked_d = get_cutout_from_mask(d, indices, axis=1)
-    masked_fg = get_cutout_from_mask(fg_stokes, indices, axis=1)
-    masked_cmb = get_cutout_from_mask(cmb_map_stokes, indices)
+    # Synthetic sky: generate full-sky then mask
+    hp_landscape = HealpixLandscape(nside=nside, stokes="QU")
+    sky = {
+        "cmb": hp_landscape.normal(jax.random.key(0)),
+        "dust": hp_landscape.normal(jax.random.key(1)),
+        "synchrotron": hp_landscape.normal(jax.random.key(2)),
+    }
+    masked_sky = get_cutout_from_mask(sky, indices)
+
+    # True K-means clusters with user-specified patch counts
+    n_regions_true = {
+        "beta_dust_patches": args.true_patches[0],
+        "temp_dust_patches": args.true_patches[1],
+        "beta_pl_patches": args.true_patches[2],
+    }
+    true_clusters = kmeans_clusters(jax.random.key(0), mask, indices, n_regions_true)
+
+    # True params: one value per patch (uniform base + slight perturbation per patch)
+    true_params_count = {
+        "beta_dust": args.true_patches[0],
+        "temp_dust": args.true_patches[1],
+        "beta_pl": args.true_patches[2],
+    }
+    params_flat, tree_struct = jax.tree.flatten(
+        jax.tree.map(lambda v, c: jnp.full((c,), v), base_params, true_params_count)
+    )
+    perturbed = [
+        x + jax.random.normal(jax.random.key(i), x.shape) * 0.2 for i, x in enumerate(params_flat)
+    ]
+    true_params = jax.tree.unflatten(tree_struct, perturbed)
+
+    # Simulate observations from true params
+    masked_d, masked_fg = simulate_D_from_params(
+        true_params,
+        true_clusters,
+        nu,
+        masked_sky,
+        dust_nu0=dust_nu0,
+        synchrotron_nu0=synchrotron_nu0,
+    )
+    masked_cmb = masked_sky["cmb"]
 
     # Load search space configuration from YAML
     if args.search_space is not None:
@@ -339,22 +344,7 @@ def main():
             "beta_pl_patches": B_s_patches,
         }
 
-        patch_indices = jax.tree.map(
-            lambda c, mp: find_kmeans_clusters(
-                mask, indices, c, jax.random.key(0), max_centroids=mp, initial_sample_size=1
-            ),
-            n_regions,
-            max_patches,
-        )
-        guess_clusters = get_cutout_from_mask(patch_indices, indices)
-        # Normalize the cluster to make indexing more logical
-        guess_clusters = jax.tree.map(
-            lambda g, c, mp: normalize_by_first_occurrence(g, c, mp).astype(jnp.int64),
-            guess_clusters,
-            n_regions,
-            max_patches,
-        )
-        guess_clusters = jax.tree.map(lambda x: x.astype(jnp.int64), guess_clusters)
+        guess_clusters = kmeans_clusters(jax.random.key(0), mask, indices, n_regions, max_patches)
 
         guess_params = jax.tree.map(lambda v, c: jnp.full((c,), v), base_params, max_count)
         lower_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), lower_bound, max_count)
@@ -394,7 +384,6 @@ def main():
             cmb = s["cmb"]
             # Variance of the CMB map
             cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, cmb))
-            # This is equivalent to jnp.var(cmb.q) + jnp.var(cmb.u)
 
             cmb_np = jnp.stack([cmb.q, cmb.u])
 

@@ -104,6 +104,6 @@ def generate_noise_operator(
         lambda s: jnp.where(noise_ratio == 0, 1.0, (s * noise_ratio) ** 2), sigma
     )
     # Create diagonal noise covariance operator
-    N = NoiseDiagonalOperator(small_n, _in_structure=masked_d.structure)
+    N = NoiseDiagonalOperator(small_n, in_structure=masked_d.structure)
 
     return noised_d, N, small_n

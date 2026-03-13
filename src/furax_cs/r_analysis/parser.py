@@ -270,6 +270,9 @@ ARGUMENT NOTES:
     vis_group.add_argument(
         "-avc", "--plot-v-vs-c", action="store_true", help="Plot variance vs number of clusters"
     )
+    vis_group.add_argument(
+        "-anlc", "--plot-nll-vs-c", action="store_true", help="Plot NLL vs number of clusters"
+    )
     vis_group.add_argument("-arv", "--plot-r-vs-v", action="store_true", help="Plot r vs variance")
     vis_group.add_argument(
         "-am",

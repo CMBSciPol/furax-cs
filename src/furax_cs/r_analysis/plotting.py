@@ -1103,10 +1103,11 @@ def _create_variance_vs_clusters_plot(
     plt.title(f"Minimum Variance vs. Number of Clusters ({patch_name})")
     plt.grid(True, linestyle="--", alpha=0.6)
 
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    cbar = plt.colorbar(sm, ax=plt.gca())
-    cbar.set_label("Total Number of Clusters")
+    if patch_key != "total":
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=plt.gca())
+        cbar.set_label("Total Number of Clusters")
 
     plt.tight_layout()
 
@@ -1140,6 +1141,135 @@ def plot_variance_vs_clusters(
     with plt.rc_context(rc_overrides):
         for patch_name, patch_key in patch_configs:
             _create_variance_vs_clusters_plot(
+                patch_name, patch_key, names, cmb_pytree_list, output_format, output_dir=output_dir
+            )
+
+
+def _create_nll_vs_clusters_plot(
+    patch_name: str,
+    patch_key: str,
+    names: list[str],
+    cmb_pytree_list: list[dict[str, Any]],
+    output_format: str,
+    output_dir: str = "plots",
+) -> None:
+    """Scatter plot of cluster count vs mean NLL for one parameter."""
+    method_dict = {}
+    base_patch_keys = [
+        "beta_dust_patches",
+        "temp_dust_patches",
+        "beta_pl_patches",
+    ]
+    other_patch_keys = [k for k in base_patch_keys if k != patch_key]
+
+    for name, cmb_pytree in zip(names, cmb_pytree_list):
+        base_name = re.sub(r" \(\d+\)$", "", name)
+
+        patches = cmb_pytree["patches_map"]
+        if patch_key == "total":
+            n_clusters = 0
+            for key in base_patch_keys:
+                patch_data = patches[key]
+                n_clusters += np.unique(patch_data[patch_data != hp.UNSEEN]).size
+            total_clusters = n_clusters
+        else:
+            patch_data = patches[patch_key]
+            n_clusters = np.unique(patch_data[patch_data != hp.UNSEEN]).size
+            total_clusters = n_clusters
+            for other_key in other_patch_keys:
+                other_patch_data = patches[other_key]
+                total_clusters += np.unique(other_patch_data[other_patch_data != hp.UNSEEN]).size
+
+        nll_summed = cmb_pytree.get("nll_summed", None)
+        if nll_summed is None:
+            continue
+        mean_nll = float(np.mean(nll_summed))
+
+        if n_clusters in method_dict:
+            existing_nll = method_dict[n_clusters]["nll"]
+            if mean_nll > existing_nll:
+                continue
+
+        method_dict[n_clusters] = {
+            "name": base_name,
+            "nll": mean_nll,
+            "total_clusters": total_clusters,
+        }
+
+    plt.figure(figsize=(8, 6))
+
+    if len(method_dict) == 0:
+        warning(f"No valid data points for {patch_key} in nll_vs_clusters plot.")
+        plt.close()
+        return
+
+    sorted_items = sorted(method_dict.items(), key=lambda item: item[0])
+    total_cluster_values = np.array([data["total_clusters"] for _, data in sorted_items])
+    total_min = float(total_cluster_values.min())
+    total_max = float(total_cluster_values.max())
+    if total_min == total_max:
+        total_min -= 0.5
+        total_max += 0.5
+
+    cmap = plt.cm.viridis
+    norm = Normalize(vmin=total_min, vmax=total_max)
+
+    for (n_clusters, data), total_clusters in zip(sorted_items, total_cluster_values):
+        nll = data["nll"]
+        color = cmap(norm(total_clusters))
+
+        plt.scatter(
+            n_clusters,
+            nll,
+            color=color,
+            s=100,
+            edgecolors="black",
+            linewidths=1,
+        )
+
+    plt.xlabel(f"Number of Clusters ({patch_name})")
+    plt.ylabel("Mean NLL")
+    plt.title(f"Mean NLL vs. Number of Clusters ({patch_name})")
+    plt.grid(True, linestyle="--", alpha=0.6)
+
+    if patch_key != "total":
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        cbar = plt.colorbar(sm, ax=plt.gca())
+        cbar.set_label("Total Number of Clusters")
+
+    plt.tight_layout()
+
+    filename_suffix = patch_key.replace("_patches", "")
+    save_or_show(f"nll_vs_clusters_{filename_suffix}", output_format, output_dir=output_dir)
+    plt.close()
+
+
+def plot_nll_vs_clusters(
+    names: list[str],
+    cmb_pytree_list: list[dict[str, Any]],
+    output_format: str,
+    output_dir: str = "plots",
+) -> None:
+    """Plot mean NLL vs cluster count for each parameter."""
+    patch_configs = [
+        (r"$\beta_d$", "beta_dust_patches"),
+        (r"$T_d$", "temp_dust_patches"),
+        (r"$\beta_s$", "beta_pl_patches"),
+        ("Total", "total"),
+    ]
+
+    rc_overrides = {
+        "font.size": font_size,
+        "axes.labelsize": font_size,
+        "xtick.labelsize": font_size,
+        "ytick.labelsize": font_size,
+        "legend.fontsize": font_size * 0.8,
+    }
+
+    with plt.rc_context(rc_overrides):
+        for patch_name, patch_key in patch_configs:
+            _create_nll_vs_clusters_plot(
                 patch_name, patch_key, names, cmb_pytree_list, output_format, output_dir=output_dir
             )
 
@@ -1742,6 +1872,7 @@ def get_plot_flags(args: Any) -> tuple[dict[str, bool], dict[str, bool]]:
         "plot_all_r_estimation": args.plot_all_r_estimation,
         "plot_r_vs_c": args.plot_r_vs_c,
         "plot_v_vs_c": args.plot_v_vs_c,
+        "plot_nll_vs_c": args.plot_nll_vs_c,
         "plot_r_vs_v": args.plot_r_vs_v,
         "plot_all_metrics": args.plot_all_metrics,
     }
@@ -1966,6 +2097,9 @@ def plot_aggregate_results(
         plt.close("all")
     if aggregate_flags["plot_v_vs_c"]:
         plot_variance_vs_clusters(stacked_titles, stacked_cmb, output_format, output_dir=output_dir)
+        plt.close("all")
+    if aggregate_flags["plot_nll_vs_c"]:
+        plot_nll_vs_clusters(stacked_titles, stacked_cmb, output_format, output_dir=output_dir)
         plt.close("all")
     if aggregate_flags["plot_r_vs_v"]:
         plot_variance_vs_r(
