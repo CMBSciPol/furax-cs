@@ -20,14 +20,11 @@ import os
 
 os.environ["EQX_ON_ERROR"] = "nan"
 import argparse
+import operator
 from functools import partial
 from typing import Any
 
 import jax
-from jaxtyping import Array, Int
-
-import operator
-
 import jax.numpy as jnp
 import jax.random
 import numpy as np
@@ -54,10 +51,9 @@ from furax_cs.kmeans_clusters import kmeans_clusters
 from furax_cs.logging_utils import info, success
 from jax_grid_search import DistributedGridSearch
 from jax_healpy.clustering import (
-    find_kmeans_clusters,
     get_cutout_from_mask,
-    normalize_by_first_occurrence,
 )
+from jaxtyping import Array, Int
 
 jax.config.update("jax_enable_x64", True)
 
@@ -294,15 +290,18 @@ def main():
         jax.tree.map(lambda v, c: jnp.full((c,), v), base_params, true_params_count)
     )
     perturbed = [
-        x + jax.random.normal(jax.random.key(i), x.shape) * 0.2
-        for i, x in enumerate(params_flat)
+        x + jax.random.normal(jax.random.key(i), x.shape) * 0.2 for i, x in enumerate(params_flat)
     ]
     true_params = jax.tree.unflatten(tree_struct, perturbed)
 
     # Simulate observations from true params
     masked_d, masked_fg = simulate_D_from_params(
-        true_params, true_clusters, nu, masked_sky,
-        dust_nu0=dust_nu0, synchrotron_nu0=synchrotron_nu0
+        true_params,
+        true_clusters,
+        nu,
+        masked_sky,
+        dust_nu0=dust_nu0,
+        synchrotron_nu0=synchrotron_nu0,
     )
     masked_cmb = masked_sky["cmb"]
 
@@ -345,22 +344,7 @@ def main():
             "beta_pl_patches": B_s_patches,
         }
 
-        patch_indices = jax.tree.map(
-            lambda c, mp: find_kmeans_clusters(
-                mask, indices, c, jax.random.key(0), max_centroids=mp, initial_sample_size=1
-            ),
-            n_regions,
-            max_patches,
-        )
-        guess_clusters = get_cutout_from_mask(patch_indices, indices)
-        # Normalize the cluster to make indexing more logical
-        guess_clusters = jax.tree.map(
-            lambda g, c, mp: normalize_by_first_occurrence(g, c, mp).astype(jnp.int64),
-            guess_clusters,
-            n_regions,
-            max_patches,
-        )
-        guess_clusters = jax.tree.map(lambda x: x.astype(jnp.int64), guess_clusters)
+        guess_clusters = kmeans_clusters(jax.random.key(0), mask, indices, n_regions, max_patches)
 
         guess_params = jax.tree.map(lambda v, c: jnp.full((c,), v), base_params, max_count)
         lower_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), lower_bound, max_count)
