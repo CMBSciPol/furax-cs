@@ -53,7 +53,6 @@ distributed-gridding = "furax_cs.scripts.distributed_gridding:main"
 fgbuster-model = "furax_cs.scripts.fgbuster_model:main"
 generate_data = "furax_cs.data.generate_maps:main"
 kmeans-model = "furax_cs.scripts.kmeans_model:main"
-noise-model = "furax_cs.scripts.noise_model:main"
 ptep-model = "furax_cs.scripts.ptep_model:main"
 r_analysis = "furax_cs.r_analysis.main:main"
 

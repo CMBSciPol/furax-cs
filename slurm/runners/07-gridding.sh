@@ -105,4 +105,4 @@ job_ids+=($jid)
 deps=$(IFS=:; echo "${job_ids[*]}")
 submit_job PTEP_SNAP "--dependency=afterok:$deps" SNAP \
     r_analysis snap -n 64 -i LiteBIRD -ird RESULTS/MULTIRES \
-    -r ptep -o $OUTPUT_DIR/SNAPSHOT -s active_set -mi 1000
+    -r ptep -o $OUTPUT_DIR/multires.parquet -s active_set -mi 1000

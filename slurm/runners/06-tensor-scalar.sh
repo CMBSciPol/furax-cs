@@ -1,14 +1,16 @@
 #!/bin/bash
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
-RUN_LOCALLY=false
+#!/bin/bash
+# RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
+RUN_LOCALLY=dryrun
 
-ACCOUNT="nih@h100"
-CONSTRAINT="h100"
+ACCOUNT="rzt@v100"
+CONSTRAINT="v100-32g"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
-QOS=""
+QOS="qos_gpu-t3"
 TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
@@ -116,12 +118,12 @@ if [ -n "$deps" ]; then
     # Analysis for cr4d1s1
     submit_job ANA_CR4 "--dependency=afterany:$deps" ANA \
         r_analysis snap -r "kmeans_cr4d1s1" -ird $OUTPUT_DIR \
-        -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP
+        -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP/tensor_to_scalar_cr4d1s1.parquet
 
     # Analysis for c1d1s1
     submit_job ANA_C1 "--dependency=afterany:$deps" ANA \
         r_analysis snap -r "kmeans_c1d1s1" -ird $OUTPUT_DIR \
-        -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP
+        -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP/tensor_to_scalar_c1d1s1.parquet
 else
     echo "No new jobs submitted. Skipping analysis."
 fi

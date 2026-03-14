@@ -34,6 +34,24 @@ RUN_COLORS = [
     "#17becf",  # cyan
 ]
 
+MULTIPLE_FILE_AGGREGATE_PLOTS = {
+    "plot_all_spectra",
+    "plot_all_cmb_recon",
+    "plot_all_histograms",
+    "plot_all_params_residuals",
+    "plot_all_systematic_maps",
+    "plot_all_statistical_maps",
+    "plot_all_r_estimation",
+    "plot_all_metrics",
+}
+
+SINGLE_FILE_AGGREGATE_PLOTS = {
+    "plot_r_vs_c",
+    "plot_v_vs_c",
+    "plot_nll_vs_c",
+    "plot_r_vs_v",
+}
+
 font_size = 22
 plt.rcParams.update(
     {
@@ -2156,6 +2174,291 @@ def plot_aggregate_results(
     if aggregate_flags["plot_all_metrics"]:
         plot_all_variances(stacked_titles, stacked_cmb, output_format, output_dir=output_dir)
         plt.close("all")
+
+
+def _extract_r_vs_clusters_points(
+    patch_key: str, kw_to_plot: dict[str, Any]
+) -> list[tuple[int, float]]:
+    """Extract (n_clusters, r_plus_sigma) keeping minimum r+sigma per cluster count."""
+    base_patch_keys = ["beta_dust_patches", "temp_dust_patches", "beta_pl_patches"]
+    method_dict: dict[int, float] = {}
+
+    for plot_dict in kw_to_plot.values():
+        cmb_pytree = plot_dict.get("cmb")
+        r_data = plot_dict.get("r")
+        if cmb_pytree is None or r_data is None or r_data.get("r_best") is None:
+            continue
+
+        patches = cmb_pytree["patches_map"]
+        if patch_key == "total":
+            n_clusters = sum(
+                np.unique(patches[k][patches[k] != hp.UNSEEN]).size for k in base_patch_keys
+            )
+        else:
+            patch_data = patches[patch_key]
+            n_clusters = np.unique(patch_data[patch_data != hp.UNSEEN]).size
+
+        r_plus_sigma = float(r_data["r_best"]) + float(r_data["sigma_r_pos"])
+        if n_clusters not in method_dict or r_plus_sigma < method_dict[n_clusters]:
+            method_dict[n_clusters] = r_plus_sigma
+
+    return sorted(method_dict.items())
+
+
+def _extract_variance_vs_clusters_points(
+    patch_key: str, kw_to_plot: dict[str, Any]
+) -> list[tuple[int, float]]:
+    """Extract (n_clusters, min_variance) keeping minimum variance per cluster count."""
+    base_patch_keys = ["beta_dust_patches", "temp_dust_patches", "beta_pl_patches"]
+    method_dict: dict[int, float] = {}
+
+    for plot_dict in kw_to_plot.values():
+        cmb_pytree = plot_dict.get("cmb")
+        if cmb_pytree is None:
+            continue
+
+        patches = cmb_pytree["patches_map"]
+        if patch_key == "total":
+            n_clusters = sum(
+                np.unique(patches[k][patches[k] != hp.UNSEEN]).size for k in base_patch_keys
+            )
+        else:
+            patch_data = patches[patch_key]
+            n_clusters = np.unique(patch_data[patch_data != hp.UNSEEN]).size
+
+        seen_mask = jax.tree.map(lambda x: jnp.all(x != hp.UNSEEN, axis=0), cmb_pytree["cmb_recon"])
+        cmb_map_seen = jax.tree.map(lambda x, m: x[:, m], cmb_pytree["cmb_recon"], seen_mask)
+        variance = jax.tree.map(lambda x: jnp.var(x, axis=1), cmb_map_seen)
+        min_variance = float(jnp.min(sum(jax.tree.leaves(variance))))
+
+        if n_clusters not in method_dict or min_variance < method_dict[n_clusters]:
+            method_dict[n_clusters] = min_variance
+
+    return sorted(method_dict.items())
+
+
+def _extract_nll_vs_clusters_points(
+    patch_key: str, kw_to_plot: dict[str, Any]
+) -> list[tuple[int, float]]:
+    """Extract (n_clusters, mean_nll) keeping minimum mean NLL per cluster count."""
+    base_patch_keys = ["beta_dust_patches", "temp_dust_patches", "beta_pl_patches"]
+    method_dict: dict[int, float] = {}
+
+    for plot_dict in kw_to_plot.values():
+        cmb_pytree = plot_dict.get("cmb")
+        if cmb_pytree is None:
+            continue
+
+        nll_summed = cmb_pytree.get("nll_summed")
+        if nll_summed is None:
+            continue
+        mean_nll = float(np.mean(nll_summed))
+
+        patches = cmb_pytree["patches_map"]
+        if patch_key == "total":
+            n_clusters = sum(
+                np.unique(patches[k][patches[k] != hp.UNSEEN]).size for k in base_patch_keys
+            )
+        else:
+            patch_data = patches[patch_key]
+            n_clusters = np.unique(patch_data[patch_data != hp.UNSEEN]).size
+
+        if n_clusters not in method_dict or mean_nll < method_dict[n_clusters]:
+            method_dict[n_clusters] = mean_nll
+
+    return sorted(method_dict.items())
+
+
+def _extract_variance_vs_r_points(
+    patch_key: str, kw_to_plot: dict[str, Any]
+) -> list[tuple[float, float, float, float]]:
+    """Extract (min_variance, r_best, sigma_r_neg, sigma_r_pos) points sorted by variance."""
+    base_patch_keys = ["beta_dust_patches", "temp_dust_patches", "beta_pl_patches"]
+    points = []
+
+    for plot_dict in kw_to_plot.values():
+        cmb_pytree = plot_dict.get("cmb")
+        r_data = plot_dict.get("r")
+        if cmb_pytree is None or r_data is None or r_data.get("r_best") is None:
+            continue
+
+        seen_mask = jax.tree.map(lambda x: jnp.all(x != hp.UNSEEN, axis=0), cmb_pytree["cmb_recon"])
+        cmb_map_seen = jax.tree.map(lambda x, m: x[:, m], cmb_pytree["cmb_recon"], seen_mask)
+        variance = jax.tree.map(lambda x: jnp.var(x, axis=1), cmb_map_seen)
+        min_variance = float(jnp.min(sum(jax.tree.leaves(variance))))
+
+        points.append((
+            min_variance,
+            float(r_data["r_best"]),
+            float(r_data["sigma_r_neg"]),
+            float(r_data["sigma_r_pos"]),
+        ))
+
+    return sorted(points, key=lambda p: p[0])
+
+
+def _plot_single_file_grouped(
+    all_groups: list[tuple[str, list[str], dict[str, Any]]],
+    single_flags: dict[str, bool],
+    output_format: str,
+    output_dir: str,
+) -> None:
+    """Line/scatter plots with one series per group for single-file aggregate plots."""
+    patch_configs = [
+        (r"$\beta_d$", "beta_dust_patches"),
+        (r"$T_d$", "temp_dust_patches"),
+        (r"$\beta_s$", "beta_pl_patches"),
+        ("Total", "total"),
+    ]
+
+    if single_flags.get("plot_r_vs_c"):
+        for patch_name, patch_key in patch_configs:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            for i, (group_label, _names, kw_to_plot) in enumerate(all_groups):
+                points = _extract_r_vs_clusters_points(patch_key, kw_to_plot)
+                if points:
+                    xs, ys = zip(*points)
+                    ax.plot(xs, ys, marker="o", label=group_label,
+                            color=RUN_COLORS[i % len(RUN_COLORS)])
+            ax.set_xlabel(f"Number of Clusters ({patch_name})")
+            ax.set_ylabel(r"Residual $r + \sigma(r)$")
+            ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+            ax.grid(True, linestyle="--", alpha=0.6)
+            ax.legend()
+            fig.tight_layout()
+            suffix = patch_key.replace("_patches", "")
+            save_or_show(
+                f"residual_r_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir
+            )
+            plt.close()
+
+    if single_flags.get("plot_v_vs_c"):
+        for patch_name, patch_key in patch_configs:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            for i, (group_label, _names, kw_to_plot) in enumerate(all_groups):
+                points = _extract_variance_vs_clusters_points(patch_key, kw_to_plot)
+                if points:
+                    xs, ys = zip(*points)
+                    ax.plot(xs, ys, marker="o", label=group_label,
+                            color=RUN_COLORS[i % len(RUN_COLORS)])
+            ax.set_xlabel(f"Number of Clusters ({patch_name})")
+            ax.set_ylabel(r"Minimum Variance (Q + U)")
+            ax.grid(True, linestyle="--", alpha=0.6)
+            ax.legend()
+            fig.tight_layout()
+            suffix = patch_key.replace("_patches", "")
+            save_or_show(
+                f"variance_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir
+            )
+            plt.close()
+
+    if single_flags.get("plot_nll_vs_c"):
+        for patch_name, patch_key in patch_configs:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            for i, (group_label, _names, kw_to_plot) in enumerate(all_groups):
+                points = _extract_nll_vs_clusters_points(patch_key, kw_to_plot)
+                if points:
+                    xs, ys = zip(*points)
+                    ax.plot(xs, ys, marker="o", label=group_label,
+                            color=RUN_COLORS[i % len(RUN_COLORS)])
+            ax.set_xlabel(f"Number of Clusters ({patch_name})")
+            ax.set_ylabel("Mean NLL")
+            ax.grid(True, linestyle="--", alpha=0.6)
+            ax.legend()
+            fig.tight_layout()
+            suffix = patch_key.replace("_patches", "")
+            save_or_show(
+                f"nll_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir
+            )
+            plt.close()
+
+    if single_flags.get("plot_r_vs_v"):
+        for patch_name, patch_key in patch_configs:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            for i, (group_label, _names, kw_to_plot) in enumerate(all_groups):
+                points = _extract_variance_vs_r_points(patch_key, kw_to_plot)
+                if points:
+                    variances = [p[0] for p in points]
+                    r_bests = [p[1] for p in points]
+                    sigma_negs = [p[2] for p in points]
+                    sigma_pos = [p[3] for p in points]
+                    color = RUN_COLORS[i % len(RUN_COLORS)]
+                    ax.errorbar(
+                        variances, r_bests,
+                        yerr=[sigma_negs, sigma_pos],
+                        fmt="o", label=group_label, color=color, capsize=3,
+                    )
+            ax.set_xlabel(r"Minimum Variance (Q + U)")
+            ax.set_ylabel(r"Residual $r$")
+            ax.axhline(0, color="black", linestyle="--", alpha=0.7)
+            ax.grid(True, linestyle="--", alpha=0.6)
+            ax.legend()
+            fig.tight_layout()
+            suffix = patch_key.replace("_patches", "")
+            save_or_show(
+                f"variance_vs_r_{suffix}_grouped", output_format, output_dir=output_dir
+            )
+            plt.close()
+
+
+def run_grouped_plot(
+    groups: list[tuple[str, Any]],
+    indiv_flags: dict[str, bool],
+    aggregate_flags: dict[str, bool],
+    output_format: str,
+    font_size: int,
+    output_dir: str,
+) -> int:
+    """Run plots with one group per `-g` pattern.
+
+    Multiple-file aggregate plots run once per group (saved under {output_dir}/{safe_pattern}/).
+    Single-file aggregate plots produce combined charts with one line/series per group.
+    """
+    if not output_dir:
+        output_dir = "plots"
+
+    set_font_size(font_size)
+    if output_format != "show":
+        os.makedirs(output_dir, exist_ok=True)
+
+    per_group_flags = {
+        k: (v if k in MULTIPLE_FILE_AGGREGATE_PLOTS else False)
+        for k, v in aggregate_flags.items()
+    }
+    single_flags = {k: aggregate_flags.get(k, False) for k in SINGLE_FILE_AGGREGATE_PLOTS}
+
+    all_groups_collected: list[tuple[str, list[str], dict[str, Any]]] = []
+
+    for pattern, group_ds in groups:
+        safe = re.sub(r"[^\w\-]", "_", pattern).strip("_")
+        group_dir = os.path.join(output_dir, safe)
+        if output_format != "show":
+            os.makedirs(group_dir, exist_ok=True)
+
+        names: list[str] = []
+        kw_to_plot: dict[str, Any] = {}
+
+        for row in tqdm(group_ds, desc=f"Group '{pattern}'"):
+            result = CompSepResult.from_dataset(row)
+            plot_dict = _result_to_plot_dict(result)
+            plot_indiv_results(
+                result.title, plot_dict, indiv_flags, output_format,
+                output_dir=group_dir, subfolder=result.kw,
+            )
+            plt.close("all")
+            names.append(result.title)
+            kw_to_plot[result.kw] = plot_dict
+
+        if not names:
+            warning(f"Group '{pattern}' matched no parquet rows, skipping.")
+            continue
+
+        plot_aggregate_results(names, kw_to_plot, per_group_flags, output_format,
+                               output_dir=group_dir)
+        all_groups_collected.append((pattern, names, kw_to_plot))
+
+    _plot_single_file_grouped(all_groups_collected, single_flags, output_format, output_dir)
+    return 0
 
 
 def run_plot(

@@ -2,13 +2,13 @@
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
 RUN_LOCALLY=false
 
-ACCOUNT="nih@h100"
-CONSTRAINT="h100"
+ACCOUNT="rzt@v100"
+CONSTRAINT="v100-32g"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
-QOS=""
+QOS="qos_gpu-t3"
 TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
@@ -78,30 +78,6 @@ RANGE_HIGH="50 100 200 300 500 1000 1500 2000 2500 3000 3500 4000 4500 5000 5500
 
 job_ids=()
 
-# =============================================================================
-# Static 1 1 1 run
-# =============================================================================
-
-RUN_OUTPUT_DIR_111="$OUTPUT_DIR/BD1_TD1_BS1"
-static_job_ids=()
-
-for MASK in GAL020 GAL040 GAL060; do
-    NAME="kmeans_${SKY}_BD1_TD1_BS1_${MASK}"
-    if [ ! -f "$RUN_OUTPUT_DIR_111/$NAME/best_params.npz" ]; then
-        jid=$(submit_job "KM_1_1_1_${MASK}" "" KMEANS \
-            kmeans-model -n 64 -ns 10 -nr 1.0 \
-            -pc 1 1 1 \
-            -tag ${SKY} -m $MASK -i LiteBIRD \
-            -s $SOLVER -mi 2000 \
-            --rtol $RTOL --atol $ATOL \
-            --name $NAME -o $RUN_OUTPUT_DIR_111)
-        static_job_ids+=("$jid")
-    else
-        echo "Skipping $NAME (already done)"
-    fi
-done
-
-job_ids+=("${static_job_ids[@]}")
 
 for config in "${CONFIGS[@]}"; do
     read -r B_DUST_BASE T_DUST_BASE B_SYNC_BASE VARY_IDX <<< "$config"
@@ -139,8 +115,8 @@ for config in "${CONFIGS[@]}"; do
         for MASK in GAL020 GAL040 GAL060; do
             NAME="kmeans_${SKY}_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
             if [ ! -f "$RUN_OUTPUT_DIR/$NAME/best_params.npz" ]; then
-                jid=$(submit_job "${JOB_NAME}_${MASK}" "" KMEANS \
-                    kmeans-model -n 64 -ns 10 -nr 1.0 \
+                jid=$(submit_job "${JOB_NAME}_${MASK}" "" KMEANS_C1D1S1 \
+                    kmeans-model -n 64 -ns 40 -nr 1.0 \
                     -pc $B_DUST $T_DUST $B_SYNC \
                     -tag ${SKY} -m $MASK -i LiteBIRD \
                     -s $SOLVER -mi 2000 \
@@ -163,9 +139,9 @@ for config in "${CONFIGS[@]}"; do
     else
         DEP_ARGS=""
     fi
-    submit_job "ANA_${OUTPUT_BASE}" "$DEP_ARGS" ANA \
+    submit_job "ANA_${OUTPUT_BASE}" "$DEP_ARGS" ANA_C1D1S1 \
         r_analysis snap -r "$REGEX" -ird $RUN_OUTPUT_DIR \
-        -o $RUN_OUTPUT_DIR/SNAPSHOT \
+        -o $RUN_OUTPUT_DIR/SNAPSHOT/kmeans_c1d1s1.parquet \
         -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD
 
     job_ids+=("${current_job_ids[@]}")

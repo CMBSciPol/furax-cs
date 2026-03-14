@@ -139,18 +139,9 @@ def compute_gradient_validation(
     mask_td = np.zeros(n_td)
     if idx_bd is not None:
         mask_bd[idx_bd] = 1
-        info(
-            f"Perturbing beta_dust at indices: {idx_bd} with values {final_params['beta_dust'][idx_bd]}"
-        )
     if idx_bp is not None:
-        info(
-            f"Perturbing beta_pl at indices: {idx_bp} with values {final_params['beta_pl'][idx_bp]}"
-        )
         mask_bp[idx_bp] = 1
     if idx_td is not None:
-        info(
-            f"Perturbing temp_dust at indices: {idx_td} with values {final_params['temp_dust'][idx_td]}"
-        )
         mask_td[idx_td] = 1
 
     masks = {

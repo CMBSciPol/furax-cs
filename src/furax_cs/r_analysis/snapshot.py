@@ -691,7 +691,7 @@ def run_snapshot(
     matched_results: dict[str, Any],
     nside: int,
     instrument: Any,
-    output_dir: str,
+    output_parquet: str,
     flags: dict[str, bool],
     max_iter: int,
     solver_name: str,
@@ -701,20 +701,18 @@ def run_snapshot(
 ) -> int:
     """Entry point for 'snap' subcommand.
 
-    Computes statistics for matched runs and saves a single combined.parquet.
+    Computes statistics for matched runs and saves results to the given parquet file.
     """
     from datasets import Dataset, concatenate_datasets, load_dataset
 
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    combined_path = output_path / "combined.parquet"
+    combined_path = Path(output_parquet)
+    combined_path.parent.mkdir(parents=True, exist_ok=True)
 
     existing_kws: set[str] = set()
     if combined_path.exists():
         existing_ds = load_dataset("parquet", data_files=str(combined_path), split="train")
         existing_kws = set(existing_ds["kw"])
-        info(f"Skipping {len(existing_kws)} already-computed entries in combined.parquet")
+        info(f"Skipping {len(existing_kws)} already-computed entries in {combined_path.name}")
 
     to_compute = {kw: v for kw, v in matched_results.items() if kw not in existing_kws}
 

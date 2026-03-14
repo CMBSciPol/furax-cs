@@ -13,6 +13,7 @@ from .compute import get_compute_flags
 from .parser import parse_args
 from .plotting import (
     get_plot_flags,
+    run_grouped_plot,
     run_plot,
 )
 from .r_estimate import run_estimate
@@ -76,7 +77,7 @@ def run_analysis() -> int | None:
             matched_results,
             nside,
             instrument,
-            args.output_dir,
+            args.output_parquet,
             flags,
             args.max_iterations,
             args.solver,
@@ -110,6 +111,21 @@ def run_analysis() -> int | None:
             patterns = args.runs
             ds = ds.filter(lambda x: any(re.search(pat, str(x["kw"])) for pat in patterns))
         indiv_flags, aggregate_flags = get_plot_flags(args)
+
+        if args.groups:
+            groups = [
+                (pattern, ds.filter(lambda x, p=pattern: bool(re.search(p, str(x["kw"])))))
+                for pattern in args.groups
+            ]
+            return run_grouped_plot(
+                groups,
+                indiv_flags,
+                aggregate_flags,
+                args.output_format,
+                args.font_size,
+                output_dir=args.output,
+            )
+
         return run_plot(
             ds,
             indiv_flags,

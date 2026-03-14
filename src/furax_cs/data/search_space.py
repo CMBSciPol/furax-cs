@@ -130,52 +130,6 @@ def dump_default_search_space(output_path: Union[str, Path]) -> None:
     print("You can now edit this file to customize the search space.")
 
 
-def load_validation_default_search_space(
-    filepath: Union[str, Path] | None = None,
-) -> dict[str, Int[Array, " N"]]:
-    """Load noise validation search space from YAML file.
-
-    Defaults to search_spaces_noise_validation.yaml (T_d=5, B_s=15, B_d 10–300 step 10).
-
-    Args:
-        filepath: Path to custom search space YAML file. If None, loads the noise
-            validation configuration.
-
-    Returns:
-        Dictionary with JAX arrays for T_d_patches, B_d_patches, B_s_patches.
-    """
-    if filepath is None:
-        data_dir = Path(__file__).parent
-        filepath = data_dir / "search_spaces_noise_validation.yaml"
-    return load_search_space(filepath)
-
-
-def dump_validation_search_space(output_path: Union[str, Path]) -> None:
-    """Dump the noise validation search space configuration to a YAML file.
-
-    Args:
-        output_path: Path where the noise validation search space YAML will be saved.
-    """
-    output_path = Path(output_path)
-    data_dir = Path(__file__).parent
-    src_path = data_dir / "search_spaces_noise_validation.yaml"
-
-    if not src_path.exists():
-        raise FileNotFoundError(
-            f"Noise validation search space file not found at {src_path}. "
-            "This should not happen - please check the package installation."
-        )
-
-    with open(src_path) as f:
-        content = f.read()
-
-    with open(output_path, "w") as f:
-        f.write(content)
-
-    print(f"Noise validation search space configuration saved to: {output_path}")
-    print("You can now edit this file to customize the search space.")
-
-
 def validate_search_space(search_space: dict[str, Int[Array, " N"]]) -> None:
     """Validate that search space has valid structure and values.
 

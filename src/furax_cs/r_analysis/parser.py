@@ -113,10 +113,10 @@ ARGUMENT NOTES:
     )
     parser_snap.add_argument(
         "-o",
-        "--output-dir",
+        "--output-parquet",
         type=str,
         required=True,
-        help="Directory to save the computed parquet files",
+        help="Path to the output parquet file (e.g. snapshots/my_run.parquet)",
     )
     parser_snap.add_argument(
         "--noise-selection",
@@ -168,6 +168,19 @@ ARGUMENT NOTES:
             "Optional regex patterns to filter parquet files by keyword (stem). "
             "Only parquets whose filename stem matches any pattern are loaded. "
             "If omitted, all parquets in --parquet-dir are loaded."
+        ),
+    )
+    parser_plot.add_argument(
+        "-g",
+        "--groups",
+        type=str,
+        nargs="*",
+        default=None,
+        help=(
+            "Regex patterns defining named groups. Each pattern forms a separate group. "
+            "Multiple-file aggregate plots run once per group (saved in {output}/{group}/). "
+            "Single-file aggregate plots (plot_r_vs_c, plot_v_vs_c, plot_nll_vs_c, plot_r_vs_v) "
+            "show one line per group on a combined chart."
         ),
     )
     parser_plot.add_argument(

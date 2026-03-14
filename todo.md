@@ -1,0 +1,7 @@
+- Make output in parquet and a better snapshot sturcture
+- Clean up the shells that does the plot with same structure as I did in jax-fli
+- remake the plots in the paper (TBD how)
+    - replot the figure 9 with different BDUST grid
+    - make bounds for maps
+    - for maps rename min tot error to  minimal 68\% c.l. upper limit?
+- delete second PTEP config
