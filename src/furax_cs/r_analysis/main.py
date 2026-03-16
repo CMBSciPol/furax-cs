@@ -3,6 +3,7 @@ import re
 import datasets
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
+
 from furax_cs.data.instruments import get_instrument
 
 from ..logging_utils import (
@@ -13,7 +14,7 @@ from .compute import get_compute_flags
 from .parser import parse_args
 from .plotting import (
     get_plot_flags,
-    run_plot,
+    run_grouped_plot,
 )
 from .r_estimate import run_estimate
 from .run_grep import run_grep
@@ -68,21 +69,30 @@ def run_analysis() -> int | None:
 
     if args.subcommand == "snap":
         assert matched_results is not None, "matched_results should be set for snap subcommand"
-        assert (
-            nside is not None and instrument is not None
-        ), "nside and instrument should be set for snap subcommand"
+        assert nside is not None and instrument is not None, (
+            "nside and instrument should be set for snap subcommand"
+        )
         flags = get_compute_flags(args, snapshot_mode=True)
+        combine_kw = None
+        names = args.name
+        if args.combine:
+            combine_kw = args.name[0] if args.name else "COMBINED"
+            names = None  # name is used as combine_kw, not per-entry
         return run_snapshot(
             matched_results,
             nside,
             instrument,
-            args.output_dir,
+            args.output_parquet,
             flags,
             args.max_iterations,
             args.solver,
             noise_selection=args.noise_selection,
             sky_tag=args.sky,
             skip_images=args.no_images,
+            max_ns=args.max_ns,
+            combine_kw=combine_kw,
+            names=names,
+            max_size=args.max_size,
         )
 
     if args.subcommand == "plot":
@@ -91,8 +101,8 @@ def run_analysis() -> int | None:
         if args.no_tex:
             plt.rcParams["text.usetex"] = False
 
-        parquet_dir = Path(args.parquet_dir)
-        all_parquets = sorted(parquet_dir.glob("*.parquet"))
+        parquet_dirs = [Path(d) for d in args.parquet_dir]
+        all_parquets = sorted(p for d in parquet_dirs for p in d.glob("*.parquet"))
         if not all_parquets:
             error(f"No parquet files found in {args.parquet_dir}")
             return
@@ -103,28 +113,62 @@ def run_analysis() -> int | None:
             "parquet",
             data_files=data_files,
             split="train",
-            streaming=True,
         ).with_format("numpy")
 
         if args.runs:
             patterns = args.runs
-            ds = ds.filter(lambda x: any(re.search(pat, str(x["kw"])) for pat in patterns))
+            ds = ds.filter(
+                lambda x: any(re.search(pat, str(x.get("name", x["kw"]))) for pat in patterns)
+            )
+
+            # Reorder rows to match -r pattern order (so -t titles align correctly)
+            def _pattern_order(row):
+                name = str(row.get("name", row["kw"]))
+                for i, pat in enumerate(patterns):
+                    if re.search(pat, name):
+                        return i
+                return len(patterns)
+
+            order = [_pattern_order(ds[i]) for i in range(len(ds))]
+            ds = ds.select(sorted(range(len(ds)), key=lambda i: order[i]))
+
         indiv_flags, aggregate_flags = get_plot_flags(args)
-        return run_plot(
-            ds,
+
+        # Build groups: if -g not given, one implicit group covering all filtered rows
+        if args.groups:
+            groups = [
+                (
+                    pattern,
+                    ds.filter(lambda x, p=pattern: bool(re.search(p, str(x.get("name", x["kw"]))))),
+                )
+                for pattern in args.groups
+            ]
+        else:
+            groups = [(".*", ds)]
+
+        return run_grouped_plot(
+            groups,
             indiv_flags,
             aggregate_flags,
             args.output_format,
             args.font_size,
             output_dir=args.output,
+            group_titles=args.group_titles,
+            row_titles=args.title,
+            colors=args.color,
+            xlim=args.xlim,
+            r_legend_anchor=args.r_legend_anchor,
+            s_legend_anchor=args.s_legend_anchor,
+            r_figsize=args.r_figsize,
+            s_figsize=args.s_figsize,
         )
 
     if args.subcommand == "validate":
         # Handle titles: if regex expanded to different number of groups, use expanded names
         assert matched_results is not None, "matched_results should be set for validate subcommand"
-        assert (
-            nside is not None and instrument is not None
-        ), "nside and instrument should be set for validate subcommand"
+        assert nside is not None and instrument is not None, (
+            "nside and instrument should be set for validate subcommand"
+        )
         titles = args.titles
         if not titles or len(titles) != len(matched_results):
             if titles and len(titles) != len(matched_results):
