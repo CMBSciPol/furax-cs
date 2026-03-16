@@ -53,19 +53,19 @@ submit_job() {
 # =============================================================================
 
 # 1. FGBuster (TNC)
-# submit_job BENCH_FGB "" BENCH bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 --fgbuster-solver TNC --noise 1.0
+submit_job BENCH_FGB "" BENCH bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 --fgbuster-solver TNC --noise 1.0 --tol 1e-16 --n-sims 20  --max-iter 2000
 
 # 2. ADABK5 (Top K = 0.5)
 submit_job BENCH_ADA5 "" BENCH \
     bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 \
-    --jax-solver ADABK5 --noise 1.0 --tol 1e-16 --n-sims 20
+    --jax-solver ADABK5 --noise 1.0 --tol 1e-2 --n-sims 20  --max-iter 2000
 
 # 3. ADABK0 (Top K = 0.0)
 submit_job BENCH_ADA0 "" BENCH \
     bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 \
-    --jax-solver ADABK0 --noise 1.0 --tol 1e-16 --n-sims 20
+    --jax-solver ADABK0 --noise 1.0 --tol 1e-16 --n-sims 20  --max-iter 2000
 
 # 4. Conditioned AdaBelief Active Set
 submit_job BENCH_ADAC "" BENCH \
     bench-clusters -n 64 -cl 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 \
-    --jax-solver adabelief --precondition --noise 1.0 --tol 1e-16 --n-sims 20
+    --jax-solver adabelief --precondition --noise 1.0 --tol 1e-16 --n-sims 20  --max-iter 2000

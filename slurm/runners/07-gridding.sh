@@ -4,10 +4,10 @@ RUN_LOCALLY=false
 
 ACCOUNT="nih@h100"
 CONSTRAINT="h100"
-GPUS_PER_NODE=1
-CPUS_PER_NODE=10
-TASKS_PER_NODE=1
-NODES=1
+GPUS_PER_NODE=8
+CPUS_PER_NODE=80
+TASKS_PER_NODE=8
+NODES=4
 QOS=""
 TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
@@ -56,72 +56,53 @@ RTOL=1e-16
 ATOL=1e-18
 
 job_ids=()
-OUTPUT_DIR="RESULTS/TENSOR_TO_SCALAR_34"
-
-echo "=== Running Tensor-to-Scalar Runs ==="
-
-NS=40
-NR=0.3
-MASK="ALL"
-SOLVER="ADABK2"
-MAX_ITER=2000
-INSTRUMENT="LiteBIRD"
-NSIDE=64
-
-run_kmeans() {
-    local TAG=$1
-    local B_DUST=$2
-    local T_DUST=$3
-    local B_SYNC=$4
-
-    local JOB_NAME="KM_${TAG}_${B_DUST}"
-    local NAME="kmeans_${TAG}_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
-
-    if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
-        echo "Submitting ${TAG} with ${B_DUST} ${T_DUST} ${B_SYNC}..."
-        jid=$(submit_job "$JOB_NAME" "" KMEANS \
-            kmeans-model -n $NSIDE -ns $NS -nr $NR \
-            -pc $B_DUST $T_DUST $B_SYNC \
-            -tag $TAG -m $MASK -i $INSTRUMENT \
-            -s $SOLVER -mi $MAX_ITER \
-            --rtol $RTOL --atol $ATOL \
-            --name $NAME -o $OUTPUT_DIR)
-        job_ids+=("$jid")
-    else
-        echo "Skipping $NAME (already done)"
-    fi
-}
-
-# 1. cr4d1s1 10 10 10
-run_kmeans "cr4d1s1" 10 10 10
-
-# 2. c1d1s1 10 10 10
-run_kmeans "c1d1s1" 10 10 10
-
-# 3. cr4d1s1 30000 1500 1500
-run_kmeans "cr4d1s1" 30000 1500 1500
-
-# 4. c1d1s1 30000 1500 1500
-run_kmeans "c1d1s1" 30000 1500 1500
+OUTPUT_DIR="RESULTS/GRID_SEARCH"
 
 # =============================================================================
-# Analysis
+# Grid search runs on galactic mask zones
+# =============================================================================
+
+# Zone 1 mask of GAL020
+jid=$(submit_job GAL020_GRID "" GRIDDING \
+    distributed-gridding -n 64 -ns 100 -nr 1.0 \
+    -tag c1d1s1 -m GAL020 -i LiteBIRD -cond \
+    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    --rtol $RTOL --atol $ATOL \
+    -o $OUTPUT_DIR)
+job_ids+=($jid)
+
+# Zone 2 mask of GAL040 - GAL020
+jid=$(submit_job GAL040_GRID "" GRIDDING \
+    distributed-gridding -n 64 -ns 100 -nr 1.0 \
+    -tag c1d1s1 -m GAL040 -i LiteBIRD -cond \
+    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    --rtol $RTOL --atol $ATOL \
+    -o $OUTPUT_DIR)
+job_ids+=($jid)
+
+# Zone 3 mask of GAL060 - GAL040
+jid=$(submit_job GAL060_GRID "" GRIDDING \
+    distributed-gridding -n 64 -ns 100 -nr 1.0 \
+    -tag c1d1s1 -m GAL060 -i LiteBIRD -cond \
+    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    --rtol $RTOL --atol $ATOL \
+    -o $OUTPUT_DIR)
+job_ids+=($jid)
+
+# Zone 4 mask of GALACTIC
+jid=$(submit_job GALACTIC_GRID "" GRIDDING \
+    distributed-gridding -n 64 -ns 100 -nr 1.0 \
+    -tag c1d1s1 -m GALACTIC -i LiteBIRD -cond \
+    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    --rtol $RTOL --atol $ATOL \
+    -o $OUTPUT_DIR)
+job_ids+=($jid)
+
+# =============================================================================
+# Snapshot
 # =============================================================================
 
 deps=$(IFS=:; echo "${job_ids[*]}")
-
-if [ -n "$deps" ]; then
-    echo "Submitting analysis jobs..."
-
-    # Analysis for cr4d1s1
-    submit_job ANA_CR4 "--dependency=afterany:$deps" ANA \
-        r_analysis snap -r "kmeans_cr4d1s1" -ird $OUTPUT_DIR \
-        -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP
-
-    # Analysis for c1d1s1
-    submit_job ANA_C1 "--dependency=afterany:$deps" ANA \
-        r_analysis snap -r "kmeans_c1d1s1" -ird $OUTPUT_DIR \
-        -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP
-else
-    echo "No new jobs submitted. Skipping analysis."
-fi
+submit_job PTEP_SNAP "--dependency=afterok:$deps" SNAP \
+    r_analysis snap -n 64 -i LiteBIRD -ird RESULTS/MULTIRES \
+    -r ptep -o $OUTPUT_DIR/multires.parquet -s active_set -mi 1000
