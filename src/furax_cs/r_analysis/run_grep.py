@@ -2,7 +2,7 @@ import os
 import re
 from typing import Union
 
-from ..logging_utils import info
+from ..logging_utils import debug, info
 
 
 def _is_regex_token(token: str) -> bool:
@@ -171,10 +171,9 @@ def run_grep(
     matches = {}
     for spec in run_specs:
         filter_str, index_spec = _parse_run_spec(spec)
-        pattern_tokens = filter_str.split("_")
-
         if _is_regex_pattern(filter_str):
-            # Regex mode: group by captured values
+            # Expand mode (default): group by captured values
+            pattern_tokens = filter_str.split("_")
             grouped = {}
             for path, folder_tokens in all_results.items():
                 matched, captures = _match_folder_with_regex_tokens(folder_tokens, pattern_tokens)

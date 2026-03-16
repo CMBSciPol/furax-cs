@@ -1,6 +1,6 @@
 import os
 from functools import partial
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 import healpy as hp
 import jax
@@ -139,18 +139,9 @@ def compute_gradient_validation(
     mask_td = np.zeros(n_td)
     if idx_bd is not None:
         mask_bd[idx_bd] = 1
-        info(
-            f"Perturbing beta_dust at indices: {idx_bd} with values {final_params['beta_dust'][idx_bd]}"
-        )
     if idx_bp is not None:
-        info(
-            f"Perturbing beta_pl at indices: {idx_bp} with values {final_params['beta_pl'][idx_bp]}"
-        )
         mask_bp[idx_bp] = 1
     if idx_td is not None:
-        info(
-            f"Perturbing temp_dust at indices: {idx_td} with values {final_params['temp_dust'][idx_td]}"
-        )
         mask_td[idx_td] = 1
 
     masks = {
@@ -397,10 +388,7 @@ def _plot_lines_on_ax(
                 prefix = f"{label} " if label else ""
 
                 final_label = (
-                    f"{prefix}\n"
-                    f" Sol:  {nll_zero:.7e}\n"
-                    f" Diff: {abs_diff:.2e}\n"
-                    f" Rel:  {rel_diff:.2e}"
+                    f"{prefix}\n Sol:  {nll_zero:.7e}\n Diff: {abs_diff:.2e}\n Rel:  {rel_diff:.2e}"
                 )
             else:
                 prefix = f"{label} " if label else ""
@@ -862,7 +850,7 @@ def run_validate(
     use_vmap: bool = True,
     output_format: str = "png",
     font_size: int = 14,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
 ) -> None:
     """Entry point for 'validate' subcommand to run the full validation pipeline.
 
@@ -1022,10 +1010,7 @@ def run_validate(
                     "beta_pl": run_data_sliced["beta_pl"][indx],
                     "temp_dust": run_data_sliced["temp_dust"][indx],
                 }
-                debug(
-                    f"argmax of temp_dust: {final_params['temp_dust'].argmax()} and it is {final_params['temp_dust'].max()}"
-                )
-
+            
                 base_name = os.path.basename(folder.rstrip("/"))
 
                 if mode == "contour":
