@@ -14,7 +14,7 @@ from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter
 
-from ...logging_utils import info , debug
+from ...logging_utils import info
 from . import get_run_color, save_or_show
 
 font_size = 22
@@ -414,7 +414,7 @@ def plot_single_file_grouped(
                         xs_at_3000_indx = np.where(np.array(xs) == 3000)[0]
                         ys_at_4000 = ys_arr[np.where(np.array(xs) == 4000)[0]]
                         ys_at_2000 = ys_arr[np.where(np.array(xs) == 2000)[0]]
-                        ys_arr[xs_at_3000_indx] = ys_at_4000 + (ys_at_2000 - ys_at_4000) * 0.
+                        ys_arr[xs_at_3000_indx] = ys_at_4000 + (ys_at_2000 - ys_at_4000) * 0.0
                         ys = ys_arr
                     if group_label == "Synthetic with BD=100":
                         xs = np.array(xs)

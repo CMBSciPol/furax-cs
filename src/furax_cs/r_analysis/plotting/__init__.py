@@ -16,7 +16,7 @@ from furax.obs.stokes import Stokes
 from jaxtyping import Array, Float
 from tqdm.auto import tqdm
 
-from ...logging_utils import warning , debug
+from ...logging_utils import warning
 from ..snapshot import CompSepResult, _result_to_plot_dict
 
 plt.style.use("science")

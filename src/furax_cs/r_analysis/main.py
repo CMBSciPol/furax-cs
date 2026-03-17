@@ -3,7 +3,6 @@ import re
 import datasets
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
-
 from furax_cs.data.instruments import get_instrument
 
 from ..logging_utils import (
@@ -69,9 +68,9 @@ def run_analysis() -> int | None:
 
     if args.subcommand == "snap":
         assert matched_results is not None, "matched_results should be set for snap subcommand"
-        assert nside is not None and instrument is not None, (
-            "nside and instrument should be set for snap subcommand"
-        )
+        assert (
+            nside is not None and instrument is not None
+        ), "nside and instrument should be set for snap subcommand"
         flags = get_compute_flags(args, snapshot_mode=True)
         combine_kw = None
         names = args.name
@@ -166,9 +165,9 @@ def run_analysis() -> int | None:
     if args.subcommand == "validate":
         # Handle titles: if regex expanded to different number of groups, use expanded names
         assert matched_results is not None, "matched_results should be set for validate subcommand"
-        assert nside is not None and instrument is not None, (
-            "nside and instrument should be set for validate subcommand"
-        )
+        assert (
+            nside is not None and instrument is not None
+        ), "nside and instrument should be set for validate subcommand"
         titles = args.titles
         if not titles or len(titles) != len(matched_results):
             if titles and len(titles) != len(matched_results):

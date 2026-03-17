@@ -17,7 +17,7 @@ from jax_healpy.clustering import get_cutout_from_mask, get_fullmap_from_cutout
 from jaxtyping import Array, Float, Int, PyTree
 from tqdm import tqdm
 
-from ..logging_utils import debug, error, info, success
+from ..logging_utils import error, info, success
 from .plotting import get_run_color, save_or_show, set_font_size
 from .utils import index_run_data
 
@@ -1010,7 +1010,7 @@ def run_validate(
                     "beta_pl": run_data_sliced["beta_pl"][indx],
                     "temp_dust": run_data_sliced["temp_dust"][indx],
                 }
-            
+
                 base_name = os.path.basename(folder.rstrip("/"))
 
                 if mode == "contour":

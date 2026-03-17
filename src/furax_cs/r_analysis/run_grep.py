@@ -2,7 +2,7 @@ import os
 import re
 from typing import Union
 
-from ..logging_utils import debug, info
+from ..logging_utils import info
 
 
 def _is_regex_token(token: str) -> bool:
