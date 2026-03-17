@@ -159,7 +159,7 @@ else
         -r $RUN_PATS \
         -ird $OUTPUT_DIR \
         -s optax_lbfgs \
-        -o $OUTPUT_DIR/SNAPSHOT_FURAX \
+        -o $OUTPUT_DIR/SNAPSHOT_FURAX/furax.parquet \
         -mi 2000 \
         -n 64 \
         -i LiteBIRD

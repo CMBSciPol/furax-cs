@@ -113,10 +113,10 @@ ARGUMENT NOTES:
     )
     parser_snap.add_argument(
         "-o",
-        "--output-dir",
+        "--output-parquet",
         type=str,
         required=True,
-        help="Directory to save the computed parquet files",
+        help="Path to the output parquet file (e.g. snapshots/my_run.parquet)",
     )
     parser_snap.add_argument(
         "--noise-selection",
@@ -125,9 +125,36 @@ ARGUMENT NOTES:
         help="Noise realization selection for plotting: 'min-value' (default), 'min-nll', or an integer index.",
     )
     parser_snap.add_argument(
+        "--max-ns",
+        type=int,
+        default=None,
+        help="Maximum number of noise realizations to use (default: all).",
+    )
+    parser_snap.add_argument(
         "--no-images",
         action="store_true",
         help="Skip rendering mollview PIL images into the parquet (faster snap)",
+    )
+    parser_snap.add_argument(
+        "--combine",
+        action="store_true",
+        help=(
+            "Merge all matched result dirs (from all -r patterns) into a single entry. "
+            "Use --name to set the entry name (defaults to 'COMBINED')."
+        ),
+    )
+    parser_snap.add_argument(
+        "--name",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Optional display names for each run group (one per matched pattern).",
+    )
+    parser_snap.add_argument(
+        "--max-size",
+        type=int,
+        default=None,
+        help="Maximum number of entries per parquet file. Splits into numbered files if exceeded.",
     )
 
     # ==========================================
@@ -155,8 +182,9 @@ ARGUMENT NOTES:
     parser_plot.add_argument(
         "--parquet-dir",
         type=str,
+        nargs="+",
         required=True,
-        help="Directory containing .parquet snapshot files produced by 'snap'",
+        help="One or more directories containing .parquet snapshot files produced by 'snap'",
     )
     parser_plot.add_argument(
         "-r",
@@ -169,6 +197,38 @@ ARGUMENT NOTES:
             "Only parquets whose filename stem matches any pattern are loaded. "
             "If omitted, all parquets in --parquet-dir are loaded."
         ),
+    )
+    parser_plot.add_argument(
+        "-g",
+        "--groups",
+        type=str,
+        nargs="*",
+        default=None,
+        help=(
+            "Regex patterns defining named groups. Each pattern forms a separate group. "
+            "Multiple-file aggregate plots run once per group (saved in {output}/{group}/). "
+            "Single-file aggregate plots (plot_r_vs_c, plot_v_vs_c, plot_nll_vs_c) "
+            "show one line per group on a combined chart."
+        ),
+    )
+    parser_plot.add_argument(
+        "-gt",
+        "--group-titles",
+        type=str,
+        nargs="+",
+        default=None,
+        help=(
+            "Human-readable title for each -g group. Used as subdir name and legend label. "
+            "Defaults to the group pattern (or 'results' when -g is omitted)."
+        ),
+    )
+    parser_plot.add_argument(
+        "-t",
+        "--title",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Per-row title overrides (sequential across all groups). Used as curve labels in r-likelihood plots.",
     )
     parser_plot.add_argument(
         "-o", "--output", type=str, help="Output directory for plots", default="plots/"
@@ -185,6 +245,53 @@ ARGUMENT NOTES:
         type=int,
         default=14,
         help="Font size for plots",
+    )
+    parser_plot.add_argument(
+        "--color",
+        type=str,
+        nargs="*",
+        default=None,
+        help="Custom color list for run lines (e.g. --color red blue green). Cycles if fewer than runs.",
+    )
+    parser_plot.add_argument(
+        "--xlim",
+        nargs=2,
+        type=float,
+        metavar=("LOWER", "UPPER"),
+        default=None,
+        help="x-axis limits for r-estimation plots (e.g. --xlim -0.002 0.01)",
+    )
+    parser_plot.add_argument(
+        "--r-legend-anchor",
+        nargs=2,
+        type=float,
+        metavar=("X", "Y"),
+        default=None,
+        help="bbox_to_anchor for the legend in r-estimation plots (e.g. --r-legend-anchor 1.0 1.0)",
+    )
+    parser_plot.add_argument(
+        "--s-legend-anchor",
+        nargs=2,
+        type=float,
+        metavar=("X", "Y"),
+        default=None,
+        help="bbox_to_anchor for the legend in BB spectra plots (e.g. --s-legend-anchor 1.0 1.0)",
+    )
+    parser_plot.add_argument(
+        "--r-figsize",
+        nargs=2,
+        type=float,
+        metavar=("W", "H"),
+        default=None,
+        help="Figure size for r-estimation plots in inches (e.g. --r-figsize 10 8)",
+    )
+    parser_plot.add_argument(
+        "--s-figsize",
+        nargs=2,
+        type=float,
+        metavar=("W", "H"),
+        default=None,
+        help="Figure size for BB spectra plots in inches (e.g. --s-figsize 10 8)",
     )
 
     # Visualization Toggles
@@ -227,34 +334,19 @@ ARGUMENT NOTES:
     vis_group.add_argument(
         "-pr", "--plot-r-estimation", action="store_true", help="Plot R estimation (single)"
     )
+    vis_group.add_argument(
+        "-ppr",
+        "--plot-params-residuals",
+        action="store_true",
+        help="Plot individual param maps + residuals vs truth (one per run)",
+    )
 
     # Aggregate/Multi-Run Plots
     vis_group.add_argument(
         "-as", "--plot-all-spectra", action="store_true", help="Plot all spectra"
     )
     vis_group.add_argument(
-        "-ac", "--plot-all-cmb-recon", action="store_true", help="Plot all CMB recons"
-    )
-    vis_group.add_argument(
-        "-asm",
-        "--plot-all-systematic-maps",
-        action="store_true",
-        help="Plot systematic residuals (mosaic)",
-    )
-    vis_group.add_argument(
-        "-atm",
-        "--plot-all-statistical-maps",
-        action="store_true",
-        help="Plot statistical residuals (mosaic)",
-    )
-    vis_group.add_argument(
         "-ar", "--plot-all-r-estimation", action="store_true", help="Plot R estimation comparison"
-    )
-    vis_group.add_argument(
-        "-appr",
-        "--plot-all-params-residuals",
-        action="store_true",
-        help="Plot residuals for all parameters (Map + Residual vs Truth)",
     )
     vis_group.add_argument(
         "-ah",
@@ -274,12 +366,6 @@ ARGUMENT NOTES:
         "-anlc", "--plot-nll-vs-c", action="store_true", help="Plot NLL vs number of clusters"
     )
     vis_group.add_argument("-arv", "--plot-r-vs-v", action="store_true", help="Plot r vs variance")
-    vis_group.add_argument(
-        "-am",
-        "--plot-all-metrics",
-        action="store_true",
-        help="Plot metric distributions across runs (variance, NLL, sum Cl_BB)",
-    )
 
     # ==========================================
     # 3. VALIDATE SUBCOMMAND

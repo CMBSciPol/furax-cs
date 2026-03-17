@@ -2,13 +2,13 @@
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
 RUN_LOCALLY=false
 
-ACCOUNT="nih@h100"
-CONSTRAINT="h100"
+ACCOUNT="rzt@v100"
+CONSTRAINT="v100-32g"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
-QOS=""
+QOS="qos_gpu-t3"
 TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
@@ -126,6 +126,6 @@ if [ "$RUN_LOCALLY" = true ] && parquets_exist "$SNAP_DIR"; then
     echo "Skipping snap step: parquets already present in $SNAP_DIR"
 else
     submit_job CACHE_PTEP "$DEP_ARGS" SNAP \
-        r_analysis snap -r ptep1 ptep2 -ird $OUTPUT_DIR \
-        -mi 2000 -n 64 -i LiteBIRD -s optax_lbfgs -o $SNAP_DIR
+        r_analysis snap -r ptep1 -ird $OUTPUT_DIR \
+        -mi 2000 -n 64 -i LiteBIRD -s optax_lbfgs -o $SNAP_DIR/multires.parquet
 fi

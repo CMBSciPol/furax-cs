@@ -2,13 +2,13 @@
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
 RUN_LOCALLY=false
 
-ACCOUNT="nih@h100"
-CONSTRAINT="h100"
+ACCOUNT="rzt@v100"
+CONSTRAINT="v100-32g"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
-QOS=""
+QOS="qos_gpu-t3"
 TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
@@ -60,17 +60,13 @@ SOLVER="ADABK0"
 OUTPUT_DIR="RESULTS/KMEANS_C1D0S0"
 
 CONFIGS=(
-    "4000 10 0 3"    # Case 1: B_DUST=4000, T_DUST=10, Vary B_SYNC
-    "4000 0 10 2"    # Case 2: B_DUST=4000, B_SYNC=10, Vary T_DUST
-    "10000 500 0 3"  # Case 3: B_DUST=10000, T_DUST=500, Vary B_SYNC
-    "10000 0 500 2"  # Case 4: B_DUST=10000, B_SYNC=500, Vary T_DUST
-    "0 500 500 1"    # Case 5: T_DUST=500, B_SYNC=500, Vary B_DUST
-    "10000 3500 0 3" # Case 6: B_DUST=10000, T_DUST=3500, Vary B_SYNC
-    "10000 0 300 2"  # Case 7: B_DUST=10000, B_SYNC=300, Vary T_DUST
+    "0 1 1 1"    # Case 5: T_DUST=500, B_SYNC=500, Vary B_DUST
+    "1 1 0 3"    # Case 1: B_DUST=4000, T_DUST=10, Vary B_SYNC
+    "1 0 1 2"    # Case 2: B_DUST=4000, B_SYNC=10, Vary T_DUST
 )
 
-RANGE_LOW="50 100 150 200 250 300 350 400 450"
-RANGE_HIGH="50 100 200 300 500 1000 1500 2000 2500 3000 3500 4000 4500 5000 5500 6000 6500 7000 7500 8000 8500 9000 9500 10000"
+RANGE_LOW="1 10 20 30 40 50 60 70 80 90"
+RANGE_HIGH="1 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 200 250 300"
 
 # =============================================================================
 # K-Means runs
@@ -111,11 +107,11 @@ for config in "${CONFIGS[@]}"; do
 
         JOB_NAME="KM_${VARY_NAME}_${VAL}"
 
-        for MASK in GAL020 GAL040 GAL060; do
+        for MASK in ALL-GALACTIC; do
             NAME="kmeans_${SKY}_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
             if [ ! -f "$RUN_OUTPUT_DIR/$NAME/best_params.npz" ]; then
-                jid=$(submit_job "${JOB_NAME}_${MASK}" "" KMEANS \
-                    kmeans-model -n 64 -ns 10 -nr 1.0 \
+                jid=$(submit_job "${JOB_NAME}_${MASK}" "" KMEANS_C1D0S0 \
+                    kmeans-model -n 64 -ns 40 -nr 1.0 \
                     -pc $B_DUST $T_DUST $B_SYNC \
                     -tag ${SKY} -m $MASK -i LiteBIRD \
                     -s $SOLVER -mi 2000 \

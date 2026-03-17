@@ -120,7 +120,7 @@ for SEED in "${SEEDS[@]}"; do
     if [ -n "$deps" ]; then
         submit_job "CACHE_FGB_${SEED}" "--dependency=afterok:$deps" SNAP \
             r_analysis snap -r fgbuster -ird $OUTPUT_DIR \
-            -mi 2000 -n 64 -i LiteBIRD -s optax_lbfgs -o $OUTPUT_DIR/SNAPSHOT
+            -mi 2000 -n 64 -i LiteBIRD -s optax_lbfgs -o $OUTPUT_DIR/SNAPSHOT/fgbuster.parquet
     fi
 
     all_job_ids+=("${job_ids[@]}")

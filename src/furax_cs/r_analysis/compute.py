@@ -77,8 +77,7 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
     plot_params = getattr(args, "plot_params", False)
     plot_patches = getattr(args, "plot_patches", False)
     plot_validation_curves = getattr(args, "plot_validation_curves", False)
-    plot_all_metrics = getattr(args, "plot_all_metrics", False)
-    plot_all_params_residuals = getattr(args, "plot_all_params_residuals", False)
+    plot_params_residuals = getattr(args, "plot_params_residuals", False)
     plot_all_histograms = getattr(args, "plot_all_histograms", False)
 
     needs_residual_maps = (
@@ -98,10 +97,10 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         or plot_params
         or plot_patches
         or plot_all
-        or plot_all_params_residuals
+        or plot_params_residuals
         or plot_all_histograms
     )
-    need_validation_curves = plot_validation_curves or plot_all or plot_all_metrics
+    need_validation_curves = plot_validation_curves or plot_all
 
     compute_syst = needs_residual_spectra or needs_residual_maps
     compute_stat = compute_syst or needs_r_estimation
@@ -469,6 +468,7 @@ def compute_group(
         "patches_map": patches_map,
         "cl_bb_sum": cl_bb_sum,
         "nll_summed": NLL_summed,
+        "f_sky": f_sky,
     }
     cl_pytree = {
         "cl_bb_r1": cl_bb_r1,

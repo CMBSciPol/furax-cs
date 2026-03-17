@@ -7,8 +7,11 @@ import re
 from pathlib import Path
 from typing import TypeAlias
 
+import astropy.units as u
 import camb
 import healpy as hp
+import jax
+import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
 from camb import initialpower
@@ -19,7 +22,7 @@ from furax.obs.operators import (
     MixingMatrixOperator,
     SynchrotronOperator,
 )
-from furax.obs.stokes import Stokes
+from furax.obs.stokes import Stokes, StokesQU
 from jaxtyping import (
     Array,
     Bool,
@@ -171,6 +174,14 @@ def parse_sky_tag(sky: str) -> tuple[str | None, str]:
     return None, sky
 
 
+def _parse_synt_tag(sky: str) -> tuple[str, int, int, int] | None:
+    """Returns (base_sky, BD, TD, BS) if sky matches {base_sky}_synt_bd{N}_td{N}_bs{N}, else None."""
+    match = re.match(r"^(.+)_synt_bd(\d+)_td(\d+)_bs(\d+)$", sky)
+    if match:
+        return match.group(1), int(match.group(2)), int(match.group(3)), int(match.group(4))
+    return None
+
+
 def generate_custom_cmb(
     r_value: float, nside: int, seed: int | None = None
 ) -> Float[Array, "3 npix"]:
@@ -226,6 +237,78 @@ def save_to_cache(
     os.makedirs(cache_dir, exist_ok=True)
     noise_str = f"noise_{int(noise_ratio * 100)}" if noise_ratio > 0 else "no_noise"
     cache_file = os.path.join(cache_dir, f"freq_maps_nside_{nside}_{noise_str}_{sky}.pkl")
+
+    synt = _parse_synt_tag(sky)
+    if synt is not None:
+        base_sky, bd, td, bs = synt
+        full_cache = os.path.join(cache_dir, f"freq_maps_nside_{nside}_no_noise_{sky}.pkl")
+        fg_cache = os.path.join(cache_dir, f"freq_maps_nside_{nside}_fg_{sky}.pkl")
+        cmb_cache = os.path.join(cache_dir, f"freq_maps_nside_{nside}_cmb_{sky}.pkl")
+
+        if not (
+            os.path.exists(full_cache) and os.path.exists(fg_cache) and os.path.exists(cmb_cache)
+        ):
+            from ..kmeans_clusters import kmeans_clusters as _kmeans_clusters
+
+            npix = 12 * nside**2
+            pysm_sky = get_sky(nside, base_sky)
+            cmb_arr = np.array(pysm_sky.components[0].map.to_value())  # (3, npix)
+            dust_arr = np.array(pysm_sky.components[1].get_emission(160 * u.GHz))  # (3, npix)
+            sync_arr = np.array(pysm_sky.components[2].get_emission(20 * u.GHz))  # (3, npix)
+            sky_synth = {
+                "cmb": StokesQU(q=jnp.array(cmb_arr[1]), u=jnp.array(cmb_arr[2])),
+                "dust": StokesQU(q=jnp.array(dust_arr[1]), u=jnp.array(dust_arr[2])),
+                "synchrotron": StokesQU(q=jnp.array(sync_arr[1]), u=jnp.array(sync_arr[2])),
+            }
+
+            mask_full = jnp.ones(npix, dtype=bool)
+            indices_full = jnp.arange(npix)
+            n_regions_true = {
+                "beta_dust_patches": bd,
+                "temp_dust_patches": td,
+                "beta_pl_patches": bs,
+            }
+            true_clusters = _kmeans_clusters(
+                jax.random.key(0), mask_full, indices_full, n_regions_true
+            )
+
+            base_params = {"beta_dust": 1.54, "temp_dust": 20.0, "beta_pl": -3.0}
+            true_params_count = {"beta_dust": bd, "temp_dust": td, "beta_pl": bs}
+            params_flat, tree_struct = jax.tree.flatten(
+                jax.tree.map(lambda v, c: jnp.full((c,), v), base_params, true_params_count)
+            )
+            perturbed = [
+                x + jr.normal(jr.PRNGKey(i), x.shape) * 0.2 for i, x in enumerate(params_flat)
+            ]
+            true_params = jax.tree.unflatten(tree_struct, perturbed)
+
+            nu = instrument.frequency
+            dust_nu0 = 160.0
+            synchrotron_nu0 = 20.0
+
+            d, d_nocmb = simulate_D_from_params(
+                true_params, true_clusters, nu, sky_synth, dust_nu0, synchrotron_nu0
+            )
+
+            n_freq = len(nu)
+            zeros_freq = np.zeros((n_freq, npix))
+            freq_maps = np.stack([zeros_freq, np.array(d.q), np.array(d.u)], axis=1)
+            fg_maps = np.stack([zeros_freq, np.array(d_nocmb.q), np.array(d_nocmb.u)], axis=1)
+            cmb_map = np.stack([cmb_arr[0], cmb_arr[1], cmb_arr[2]])  # (3, npix) full IQU
+
+            with open(full_cache, "wb") as f:
+                pickle.dump(freq_maps, f)
+            with open(fg_cache, "wb") as f:
+                pickle.dump(fg_maps, f)
+            with open(cmb_cache, "wb") as f:
+                pickle.dump(cmb_map, f)
+            success(f"Generated synthetic sky cache for {sky}.")
+        else:
+            with open(full_cache, "rb") as f:
+                freq_maps = pickle.load(f)
+            info(f"Loaded synthetic sky cache for {sky}.")
+
+        return np.array(instrument.frequency), freq_maps
 
     # Check if file exists, load if it does, otherwise create and save it
     r_val = None
@@ -350,6 +433,15 @@ def save_fg_map(
     info(
         f"Generating fg map for nside {nside}, noise_ratio {noise_ratio}, instrument {instrument_name}"
     )
+    if _parse_synt_tag(sky) is not None:
+        instrument = get_instrument(instrument_name)
+        cache_dir = "freq_maps_cache"
+        fg_cache = os.path.join(cache_dir, f"freq_maps_nside_{nside}_fg_{sky}.pkl")
+        if not os.path.exists(fg_cache):
+            save_to_cache(nside, noise_ratio=0.0, instrument_name=instrument_name, sky=sky)
+        with open(fg_cache, "rb") as f:
+            fg_maps = pickle.load(f)
+        return np.array(instrument.frequency), fg_maps
     _, stripped_sky = parse_sky_tag(sky)
     return save_to_cache(
         nside, noise_ratio=noise_ratio, instrument_name=instrument_name, sky=stripped_sky, key=key
@@ -373,6 +465,16 @@ def load_fg_map(
     Example:
         >>> freqs, fg_maps = load_fg_map(nside=64, sky="c1d1s1")
     """
+    if _parse_synt_tag(sky) is not None:
+        instrument = get_instrument(instrument_name)
+        fg_cache = os.path.join("freq_maps_cache", f"freq_maps_nside_{nside}_fg_{sky}.pkl")
+        if not os.path.exists(fg_cache):
+            raise FileNotFoundError(
+                f"FG cache not found for sky {sky}. "
+                f"Run: generate_data --sky {sky} --nside {nside}"
+            )
+        with open(fg_cache, "rb") as f:
+            return np.array(instrument.frequency), pickle.load(f)
     _, stripped_sky = parse_sky_tag(sky)
     return load_from_cache(
         nside, noise_ratio=noise_ratio, instrument_name=instrument_name, sky=stripped_sky
@@ -396,6 +498,13 @@ def save_cmb_map(nside: int, sky: str = "c1d0s0") -> Float[Array, "3 npix"]:
     # Define cache file path
     cache_dir = "freq_maps_cache"
     os.makedirs(cache_dir, exist_ok=True)
+
+    if _parse_synt_tag(sky) is not None:
+        cmb_cache = os.path.join(cache_dir, f"freq_maps_nside_{nside}_cmb_{sky}.pkl")
+        if not os.path.exists(cmb_cache):
+            save_to_cache(nside, sky=sky)
+        with open(cmb_cache, "rb") as f:
+            return pickle.load(f)
 
     cmb_tag, _ = parse_sky_tag(sky)
 
@@ -440,6 +549,16 @@ def load_cmb_map(nside: int, sky: str = "c1d0s0") -> Float[Array, "3 npix"]:
     """
     # Define cache file path
     cache_dir = "freq_maps_cache"
+
+    if _parse_synt_tag(sky) is not None:
+        cmb_cache = os.path.join(cache_dir, f"freq_maps_nside_{nside}_cmb_{sky}.pkl")
+        if not os.path.exists(cmb_cache):
+            raise FileNotFoundError(
+                f"CMB cache not found for sky {sky}. "
+                f"Run: generate_data --sky {sky} --nside {nside}"
+            )
+        with open(cmb_cache, "rb") as f:
+            return pickle.load(f)
 
     cmb_tag, _ = parse_sky_tag(sky)
 

@@ -55,41 +55,42 @@ submit_job() {
 RTOL=1e-16
 ATOL=1e-18
 
-OUTPUT_DIR="RESULTS/NOISE_MODEL"
+SKY=c1d1s1_synt_bd100_td15_bs5
 MASK="ALL-GALACTIC"
-INSTRUMENT="LiteBIRD"
-NSIDE=64
-NS=20
-NR=1.0
-SOLVER="optax_lbfgs"
-MAX_ITER=2000
+OUTPUT_DIR="RESULTS/NOISE_MODEL"
 
 # =============================================================================
-# Noise model validation: vary true patch counts (-tp)
+# Noise model: grid over BD patches (truth: BD=100, TD=15, BS=5)
 # =============================================================================
-# Format: "B_DUST T_DUST B_SYNC"
-TRUE_PATCH_CONFIGS=(
-    "10 5 5"
-    "50 5 10"
-    "100 5 15"
-    "200 10 20"
-    "500 20 50"
-)
 
 job_ids=()
 
-for tp_config in "${TRUE_PATCH_CONFIGS[@]}"; do
-    read -r TP_BD TP_TD TP_BS <<< "$tp_config"
-    JOB_NAME="NOISE_BD${TP_BD}_TD${TP_TD}_BS${TP_BS}"
-
-    jid=$(submit_job "$JOB_NAME" "" NOISE \
-        noise-model -n $NSIDE -ns $NS -nr $NR \
-        -m $MASK -i $INSTRUMENT \
-        -s $SOLVER -mi $MAX_ITER \
-        -tp $TP_BD $TP_TD $TP_BS \
-        --rtol $RTOL --atol $ATOL \
-        -o $OUTPUT_DIR)
-    job_ids+=("$jid")
+for BD in $(seq 10 10 300); do
+    NAME="kmeans_${SKY}_BD${BD}_TD15_BS5"
+    if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
+        jid=$(submit_job "KM_BD${BD}" "" KMEANS \
+            kmeans-model -n 64 -ns 10 -nr 1.0 \
+            -pc $BD 15 5 \
+            -tag ${SKY} -m $MASK -i LiteBIRD \
+            -s optax_lbfgs -mi 2000 \
+            --rtol $RTOL --atol $ATOL \
+            --name $NAME -o $OUTPUT_DIR)
+        job_ids+=("$jid")
+    else
+        echo "Skipping $NAME (already done)"
+    fi
 done
 
-echo "Submitted ${#job_ids[@]} noise-model jobs."
+# =============================================================================
+# Snapshot (depends on all kmeans jobs)
+# =============================================================================
+
+deps=$(IFS=:; echo "${job_ids[*]}")
+DEP_ARGS=""
+[ -n "$deps" ] && DEP_ARGS="--dependency=afterok:$deps"
+
+REGEX="kmeans_c1d1s1_synt_bd100_td15_bs5_BD(\d+)_TD15_BS5"
+submit_job "ANA_NOISE" "$DEP_ARGS" ANA \
+    r_analysis snap -r "$REGEX" -ird $OUTPUT_DIR \
+    -o $OUTPUT_DIR/SNAPSHOT/noise_model.parquet \
+    -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD

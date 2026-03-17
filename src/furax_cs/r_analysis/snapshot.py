@@ -1,4 +1,5 @@
 """Parquet-based snapshot storage for component separation results."""
+
 from __future__ import annotations
 
 import io
@@ -99,10 +100,11 @@ class ParamData:
 @dataclass(frozen=True)
 class CompSepResult:
     kw: str
-    title: str
+    name: str
     nside: int
     sky_tag: str
     noise_selection: str
+    fsky: float
     cmb: CMBData
     cl: CLData
     r: REstimate
@@ -216,10 +218,11 @@ def _build_features(npix: int, n_real: int) -> datasets.Features:
         {
             # Metadata
             "kw": Value("string"),
-            "title": Value("string"),
+            "name": Value("string"),
             "nside": Value("int32"),
             "sky_tag": Value("string"),
             "noise_selection": Value("string"),
+            "fsky": Value("float64"),
             "version": Value("int32"),
             # Fixed-length 1D maps (npix,)
             "cmb_q": Sequence(Value("float64"), length=npix),
@@ -235,7 +238,7 @@ def _build_features(npix: int, n_real: int) -> datasets.Features:
             "true_temp_dust": Sequence(Value("float64")),
             "true_beta_pl": Sequence(Value("float64")),
             # n_real-length sequences (nll_summed always present; cl_bb_sum may be None)
-            "nll_summed": Sequence(Value("float64"), length=n_real),
+            "nll_summed": Sequence(Value("float64")),  # no fixed length — n_real varies across runs
             "cl_bb_sum": Sequence(Value("float64")),  # nullable — no fixed length
             # 2D (n_real, npix) — variable n_real → None as first dim
             "cmb_recon_q": Array2D(shape=(None, npix), dtype="float64"),
@@ -293,10 +296,11 @@ def _result_to_row(result: CompSepResult) -> dict:
 
     return {
         "kw": [result.kw],
-        "title": [result.title],
+        "name": [result.name],
         "nside": [result.nside],
         "sky_tag": [result.sky_tag],
         "noise_selection": [result.noise_selection],
+        "fsky": [result.fsky],
         "version": [result.version],
         "cmb_q": [_seq(result.cmb.cmb_q)],
         "cmb_u": [_seq(result.cmb.cmb_u)],
@@ -429,12 +433,20 @@ def _row_to_result(row: dict) -> CompSepResult:
     def _img(key):
         return row.get(key)
 
+    # backward-compat: old parquets have "title" instead of "name"
+    name = str(row.get("name", row.get("title", row["kw"])))
+    fsky_raw = row.get("fsky")
+    fsky = float(fsky_raw) if fsky_raw is not None else float("nan")
+    if fsky != fsky:  # NaN check
+        fsky = float("nan")
+
     return CompSepResult(
         kw=str(row["kw"]),
-        title=str(row["title"]),
+        name=name,
         nside=int(row["nside"]),
         sky_tag=str(row["sky_tag"]),
         noise_selection=str(row["noise_selection"]),
+        fsky=fsky,
         version=int(row["version"]),
         cmb=cmb,
         cl=cl,
@@ -463,37 +475,43 @@ def _row_to_result(row: dict) -> CompSepResult:
 
 def _build_result_from_pytrees(
     kw: str,
-    title: str,
+    name: str,
     nside: int,
     sky_tag: str,
     noise_selection: str,
+    fsky: float,
     cmb_pytree: dict[str, Any],
     cl_pytree: dict[str, Any],
     r_pytree: dict[str, Any],
     residual_pytree: dict[str, Any],
     plotting_data: dict[str, Any],
     skip_images: bool = False,
+    max_ns: int | None = None,
 ) -> CompSepResult:
     """Convert the 5 pytrees from compute_group() into a CompSepResult."""
     cmb_stokes = cmb_pytree["cmb"]
     cmb_recon = cmb_pytree["cmb_recon"]
     patches_map = cmb_pytree["patches_map"]
-    cl_bb_sum = cmb_pytree.get("cl_bb_sum")
-    nll_summed = cmb_pytree["nll_summed"]
+    cl_bb_sum_raw = cmb_pytree.get("cl_bb_sum")
+    nll_summed_raw = cmb_pytree["nll_summed"]
 
-    # Determine best realization index
+    # Slice noise realizations before any indexing
+    cl_bb_sum = np.asarray(cl_bb_sum_raw)[:max_ns] if cl_bb_sum_raw is not None else None
+    nll_summed = np.asarray(nll_summed_raw)[:max_ns]
+
+    # Determine best realization index (after slicing)
     if noise_selection == "min-nll":
-        best_idx = int(np.argmin(np.asarray(nll_summed)))
+        best_idx = int(np.argmin(nll_summed))
     elif noise_selection == "min-value":
-        best_idx = int(np.argmin(np.asarray(cl_bb_sum))) if cl_bb_sum is not None else 0
+        best_idx = int(np.argmin(cl_bb_sum)) if cl_bb_sum is not None else 0
     else:
         best_idx = int(noise_selection)
 
     # CMB arrays
     cmb_q = np.asarray(cmb_stokes.q)
     cmb_u = np.asarray(cmb_stokes.u)
-    cmb_recon_q = np.asarray(cmb_recon.q)  # (n_real, npix)
-    cmb_recon_u = np.asarray(cmb_recon.u)  # (n_real, npix)
+    cmb_recon_q = np.asarray(cmb_recon.q)[:max_ns]  # (n_real, npix)
+    cmb_recon_u = np.asarray(cmb_recon.u)[:max_ns]  # (n_real, npix)
 
     # Patch maps (always present; float64 to preserve hp.UNSEEN ≈ -1.6375e30)
     patches_beta_dust = np.asarray(patches_map["beta_dust_patches"])
@@ -542,7 +560,7 @@ def _build_result_from_pytrees(
     syst_map_raw = residual_pytree.get("syst_map")
     stat_maps_raw = residual_pytree.get("stat_maps")
     syst_arr = np.asarray(syst_map_raw) if syst_map_raw is not None else None
-    stat_arr = np.asarray(stat_maps_raw) if stat_maps_raw is not None else None
+    stat_arr = np.asarray(stat_maps_raw)[:max_ns] if stat_maps_raw is not None else None
     residual = ResidualData(syst_map=syst_arr, stat_maps=stat_arr)
 
     # Params
@@ -560,13 +578,13 @@ def _build_result_from_pytrees(
     if all_params_list:
         all_params_beta_dust = np.concatenate(
             [np.asarray(d["beta_dust"]) for d in all_params_list], axis=1
-        )
+        )[:max_ns]
         all_params_temp_dust = np.concatenate(
             [np.asarray(d["temp_dust"]) for d in all_params_list], axis=1
-        )
+        )[:max_ns]
         all_params_beta_pl = np.concatenate(
             [np.asarray(d["beta_pl"]) for d in all_params_list], axis=1
-        )
+        )[:max_ns]
     else:
         all_params_beta_dust = all_params_temp_dust = all_params_beta_pl = None
 
@@ -590,8 +608,8 @@ def _build_result_from_pytrees(
         patches_beta_dust=patches_beta_dust,
         patches_temp_dust=patches_temp_dust,
         patches_beta_pl=patches_beta_pl,
-        cl_bb_sum=np.asarray(cl_bb_sum) if cl_bb_sum is not None else None,
-        nll_summed=np.asarray(nll_summed),
+        cl_bb_sum=cl_bb_sum,
+        nll_summed=nll_summed,
     )
 
     # Render mollview images
@@ -605,10 +623,11 @@ def _build_result_from_pytrees(
 
     return CompSepResult(
         kw=kw,
-        title=title,
+        name=name,
         nside=nside,
         sky_tag=sky_tag,
         noise_selection=noise_selection,
+        fsky=fsky,
         cmb=cmb_data,
         cl=cl,
         r=r,
@@ -691,37 +710,91 @@ def run_snapshot(
     matched_results: dict[str, Any],
     nside: int,
     instrument: Any,
-    output_dir: str,
+    output_parquet: str,
     flags: dict[str, bool],
     max_iter: int,
     solver_name: str,
     noise_selection: str,
     sky_tag: str,
     skip_images: bool = False,
+    max_ns: int | None = None,
+    combine_kw: str | None = None,
+    names: list[str] | None = None,
+    max_size: int | None = None,
 ) -> int:
     """Entry point for 'snap' subcommand.
 
-    Computes statistics for matched runs and saves a single combined.parquet.
+    Computes statistics for matched runs and saves results to the given parquet file.
+    If combine_kw is set, all matched dirs are merged into a single kw entry.
     """
     from datasets import Dataset, concatenate_datasets, load_dataset
 
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    if combine_kw:
+        all_folders: list[str] = []
+        first_index_spec = None
+        for _kw, (folders, indices, _root) in matched_results.items():
+            all_folders.extend(folders)
+            if first_index_spec is None:
+                first_index_spec = indices
+        matched_results = {
+            combine_kw: (all_folders, first_index_spec if first_index_spec is not None else 0, "")
+        }
 
-    combined_path = output_path / "combined.parquet"
+    combined_path = Path(output_parquet)
+    combined_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Collect existing kws from the output file(s) — supports both single
+    # file and numbered split files (e.g. stem_0001.parquet, stem_0002.parquet).
     existing_kws: set[str] = set()
+    existing_files: list[str] = []
     if combined_path.exists():
-        existing_ds = load_dataset("parquet", data_files=str(combined_path), split="train")
+        existing_files = [str(combined_path)]
+    else:
+        stem = combined_path.stem
+        split_files = sorted(combined_path.parent.glob(f"{stem}_[0-9][0-9][0-9][0-9].parquet"))
+        existing_files = [str(p) for p in split_files]
+
+    if existing_files:
+        existing_ds = load_dataset("parquet", data_files=existing_files, split="train")
         existing_kws = set(existing_ds["kw"])
-        info(f"Skipping {len(existing_kws)} already-computed entries in combined.parquet")
+        info(f"Skipping {len(existing_kws)} already-computed entries")
 
     to_compute = {kw: v for kw, v in matched_results.items() if kw not in existing_kws}
 
-    if to_compute:
+    if not to_compute:
+        return 0
+
+    # Resolve the name for each kw upfront (before chunking reorders things)
+    all_kws = list(to_compute.keys())
+    kw_to_name: dict[str, str] = {}
+    for i, kw in enumerate(all_kws):
+        kw_to_name[kw] = names[i] if (names and i < len(names)) else kw
+
+    # Chunk the computation: process at most max_size entries at a time,
+    # writing one parquet file per chunk to bound memory usage.
+
+    chunk_iter: list[dict[str, Any]]
+    if max_size:
+        items = list(to_compute.items())
+        chunk_iter = [
+            dict(items[start : start + max_size]) for start in range(0, len(items), max_size)
+        ]
+    else:
+        chunk_iter = [to_compute]
+
+    # Determine starting part number from existing split files
+    if max_size:
+        stem = combined_path.stem
+        existing_split = sorted(combined_path.parent.glob(f"{stem}_[0-9][0-9][0-9][0-9].parquet"))
+        part_num = len(existing_split)  # 0-based count of existing parts
+    else:
+        part_num = 0
+
+    total_written = 0
+    for chunk in chunk_iter:
         t0 = time.perf_counter()
         computed = compute_all(
-            to_compute,
+            chunk,
             nside,
             instrument,
             flags,
@@ -730,19 +803,23 @@ def run_snapshot(
             noise_selection=noise_selection,
             sky_tag=sky_tag,
         )
-        info(f"compute_all done in {time.perf_counter() - t0:.2f}s for {len(to_compute)} groups")
+        info(f"compute_all done in {time.perf_counter() - t0:.2f}s for {len(chunk)} groups")
 
         new_results = []
         for kw, result_tuple in computed.items():
             t0b = time.perf_counter()
+            result_name = kw_to_name[kw]
+            f_sky = result_tuple[0].get("f_sky", float("nan"))
             result = _build_result_from_pytrees(
                 kw,
-                kw,
+                result_name,
                 nside,
                 sky_tag,
                 noise_selection,
+                float(f_sky),
                 *result_tuple,
                 skip_images=skip_images,
+                max_ns=max_ns,
             )
             new_results.append(result)
             info(f"  [{kw}] build: {time.perf_counter() - t0b:.2f}s")
@@ -752,17 +829,29 @@ def run_snapshot(
         n_real = new_results[0].cmb.cmb_recon_q.shape[0]
         new_ds = Dataset.from_dict(_stack_rows(new_results), features=_build_features(npix, n_real))
 
-        if combined_path.exists():
-            existing_full = load_dataset("parquet", data_files=str(combined_path), split="train")
-            combined_ds = concatenate_datasets([existing_full, new_ds])
-        else:
-            combined_ds = new_ds
-
         t0p = time.perf_counter()
-        combined_ds.to_parquet(str(combined_path))
-        success(
-            f"Saved {combined_path} ({len(combined_ds)} total rows, "
-            f"parquet: {time.perf_counter() - t0p:.2f}s)"
-        )
+        if max_size:
+            # Write each chunk as a numbered split file
+            part_num += 1
+            chunk_path = combined_path.parent / f"{combined_path.stem}_{part_num:04d}.parquet"
+            new_ds.to_parquet(str(chunk_path))
+            success(
+                f"Saved {chunk_path.name} ({len(new_ds)} rows, "
+                f"parquet: {time.perf_counter() - t0p:.2f}s)"
+            )
+        else:
+            # Single-file mode: append to existing if present
+            if existing_files:
+                existing_full = load_dataset("parquet", data_files=existing_files, split="train")
+                combined_ds = concatenate_datasets([existing_full, new_ds])
+            else:
+                combined_ds = new_ds
+            combined_ds.to_parquet(str(combined_path))
+            success(
+                f"Saved {combined_path} ({len(combined_ds)} total rows, "
+                f"parquet: {time.perf_counter() - t0p:.2f}s)"
+            )
+        total_written += len(new_results)
 
+    info(f"Snapshot complete: {total_written} new entries written")
     return 0

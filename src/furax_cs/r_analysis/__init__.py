@@ -4,7 +4,6 @@ os.environ["EQX_ON_ERROR"] = "nan"
 
 from .plotting import (
     plot_all_cl_residuals,
-    plot_all_cmb,
     plot_all_r_estimation,
     plot_r_estimator,
 )
@@ -31,7 +30,6 @@ __all__ = [
     "compute_cl_obs_bb",
     "compute_cl_true_bb",
     "plot_all_cl_residuals",
-    "plot_all_cmb",
     "plot_all_r_estimation",
     "params_to_maps",
     "CompSepResult",
