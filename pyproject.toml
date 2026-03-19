@@ -48,6 +48,7 @@ plotting = [
 
 [project.scripts]
 bench-bcp = "furax_cs.scripts.bench_bcp:main"
+compute-mr = "furax_cs.scripts.compute_mr:main"
 bench-clusters = "furax_cs.scripts.bench_clusters:main"
 distributed-gridding = "furax_cs.scripts.distributed_gridding:main"
 fgbuster-model = "furax_cs.scripts.fgbuster_model:main"
