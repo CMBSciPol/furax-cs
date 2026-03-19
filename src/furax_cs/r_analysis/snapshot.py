@@ -721,6 +721,7 @@ def run_snapshot(
     combine_kw: str | None = None,
     names: list[str] | None = None,
     max_size: int | None = None,
+    bin_config: dict[str, int] | None = None,
 ) -> int:
     """Entry point for 'snap' subcommand.
 
@@ -802,6 +803,7 @@ def run_snapshot(
             solver_name,
             noise_selection=noise_selection,
             sky_tag=sky_tag,
+            bin_config=bin_config,
         )
         info(f"compute_all done in {time.perf_counter() - t0:.2f}s for {len(chunk)} groups")
 

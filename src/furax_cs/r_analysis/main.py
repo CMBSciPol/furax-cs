@@ -3,6 +3,7 @@ import re
 import datasets
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
+
 from furax_cs.data.instruments import get_instrument
 
 from ..logging_utils import (
@@ -77,6 +78,14 @@ def run_analysis() -> int | None:
         if args.combine:
             combine_kw = args.name[0] if args.name else "COMBINED"
             names = None  # name is used as combine_kw, not per-entry
+        bin_config: dict[str, int] = {}
+        if args.bin_bd is not None:
+            bin_config["beta_dust"] = args.bin_bd
+        if args.bin_td is not None:
+            bin_config["temp_dust"] = args.bin_td
+        if args.bin_bs is not None:
+            bin_config["beta_pl"] = args.bin_bs
+
         return run_snapshot(
             matched_results,
             nside,
@@ -92,6 +101,7 @@ def run_analysis() -> int | None:
             combine_kw=combine_kw,
             names=names,
             max_size=args.max_size,
+            bin_config=bin_config or None,
         )
 
     if args.subcommand == "plot":
@@ -160,6 +170,8 @@ def run_analysis() -> int | None:
             s_legend_anchor=args.s_legend_anchor,
             r_figsize=args.r_figsize,
             s_figsize=args.s_figsize,
+            r_range=args.r_range,
+            r_plot=args.r_plot,
         )
 
     if args.subcommand == "validate":

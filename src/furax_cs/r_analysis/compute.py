@@ -26,6 +26,7 @@ from .residuals import (
     compute_total_res,
 )
 from .utils import (
+    bin_patches,
     expand_stokes,
     index_run_data,
     params_to_maps,
@@ -148,6 +149,8 @@ def _compute_single_folder(
     full_results: dict[str, Array] | None = None,
     max_iter: int = 100,
     solver_name: str = "optax_lbfgs",
+    bin_config: dict[str, int] | None = None,
+    noise_selection: str = "min-value",
 ) -> dict[str, Any] | None:
     """Process a single result folder for a specific run index.
 
@@ -189,6 +192,11 @@ def _compute_single_folder(
 
     # Slice the specific run data
     run_data = index_run_data(full_results, run_index)
+
+    # Apply parameter binning before any downstream computation
+    if bin_config:
+        run_data = bin_patches(run_data, bin_config, noise_selection)
+
     (indices,) = jnp.where(mask == 1)
 
     # Extract CMB data
@@ -199,7 +207,11 @@ def _compute_single_folder(
     # Compute W_D_FG if needed for systematic residuals
     wd = None
     if flags["compute_syst"]:
-        cache_key = f"W_D_FG_{run_index}"
+        bin_suffix = ""
+        if bin_config:
+            parts = sorted(f"{k}{v}" for k, v in bin_config.items())
+            bin_suffix = "_bin_" + "_".join(parts)
+        cache_key = f"W_D_FG_{run_index}{bin_suffix}"
         if cache_key in full_results:
             info(f"Systematics cached for index {run_index}. Loading from cache...")
             cached_w = full_results[cache_key]
@@ -271,6 +283,7 @@ def compute_group(
     max_iter: int = 100,
     noise_selection: str = "min-value",
     sky_tag: str = "c1d0s0",
+    bin_config: dict[str, int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]] | None:
     """Process a group of folders for given run indices.
 
@@ -330,6 +343,8 @@ def compute_group(
                 full_results=full_results,
                 max_iter=max_iter,
                 solver_name=solver_name,
+                bin_config=bin_config,
+                noise_selection=noise_selection,
             )
             if result is None:
                 continue
@@ -516,6 +531,7 @@ def compute_all(
     titles: dict[str, str] | None = None,
     noise_selection: str = "min-value",
     sky_tag: str = "c1d0s0",
+    bin_config: dict[str, int] | None = None,
 ) -> OrderedDict[
     str, tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]
 ]:
@@ -560,6 +576,7 @@ def compute_all(
             solver_name=solver_name,
             noise_selection=noise_selection,
             sky_tag=sky_tag,
+            bin_config=bin_config,
         )
 
         if result is not None:

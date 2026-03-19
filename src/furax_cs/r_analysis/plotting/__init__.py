@@ -130,7 +130,7 @@ def save_or_show(
         plt.show()
     else:
         ext = "pdf" if output_format == "pdf" else "png"
-        dpi = 300 if ext == "png" else None
+        dpi = 1200 if ext == "png" else None
         filename = _truncate_name_if_too_long(filename)
 
         base_dir = output_dir
@@ -140,7 +140,7 @@ def save_or_show(
         os.makedirs(base_dir, exist_ok=True)
 
         filepath = os.path.join(base_dir, f"{filename}.{ext}")
-        plt.savefig(filepath, dpi=dpi, bbox_inches="tight")
+        plt.savefig(filepath, dpi=dpi, bbox_inches="tight", transparent=True)
         plt.close()
         success(f"Saved: {filepath}")
 
@@ -376,6 +376,8 @@ def plot_aggregate_results(
     s_legend_anchor: tuple[float, float] | None = None,
     r_figsize: tuple[float, float] | None = None,
     s_figsize: tuple[float, float] | None = None,
+    r_range: tuple[float, float] | None = None,
+    r_plot: tuple[float, float] | None = None,
 ) -> None:
     from .group import plot_all_cl_residuals, plot_all_histograms, plot_all_r_estimation
     from .single import plot_variance_vs_r
@@ -439,6 +441,8 @@ def plot_aggregate_results(
             colors=colors,
             legend_anchor=s_legend_anchor,
             figsize=s_figsize,
+            r_range=r_range,
+            r_plot=r_plot,
         )
         plt.close("all")
 
@@ -453,6 +457,7 @@ def plot_aggregate_results(
             xlim=xlim,
             legend_anchor=r_legend_anchor,
             figsize=r_figsize,
+            r_plot=r_plot,
         )
         plt.close("all")
 
@@ -475,6 +480,8 @@ def run_grouped_plot(
     s_legend_anchor: tuple[float, float] | None = None,
     r_figsize: tuple[float, float] | None = None,
     s_figsize: tuple[float, float] | None = None,
+    r_range: tuple[float, float] | None = None,
+    r_plot: tuple[float, float] | None = None,
 ) -> int:
     """Run plots with one group per `-g` pattern."""
     from .single import plot_single_file_grouped
@@ -553,6 +560,8 @@ def run_grouped_plot(
             s_legend_anchor=s_legend_anchor,
             r_figsize=r_figsize,
             s_figsize=s_figsize,
+            r_range=r_range,
+            r_plot=r_plot,
         )
         all_groups_collected.append((group_label, names, kw_to_plot))
 
