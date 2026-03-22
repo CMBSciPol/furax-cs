@@ -30,9 +30,17 @@ version = "0.1.1"
 
 [project.optional-dependencies]
 all = [
-  "furax-cs[plotting,dev,benchmarks,io]"
+  "furax-cs[plotting,dev,benchmarks,io,docs]"
 ]
 benchmarks = ["jax-hpc-profiler>=v0.3.2"]
+docs = [
+  "sphinx>=7.0",
+  "furo",
+  "myst-parser>=2.0",
+  "nbsphinx>=0.9",
+  "sphinx-copybutton",
+  "ipykernel",
+]
 dev = [
   "ruff",
   "pre-commit",

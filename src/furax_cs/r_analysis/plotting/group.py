@@ -315,7 +315,7 @@ def plot_all_r_estimation(
                 )
 
         plt.xlabel(r"$r$")
-        plt.ylabel("Relative Likelihood")
+        plt.ylabel("Likelihood")
         if xlim:
             plt.xlim(*xlim)
         else:

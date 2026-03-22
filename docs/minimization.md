@@ -27,7 +27,7 @@ from furax_cs import minimize
 final_params, state = minimize(
     fn=my_loss_fn,
     init_params=params,
-    solver_name="active_set",  # or "optax_lbfgs"
+    solver_name="ADABK0",  # or "optax_lbfgs"
     lower_bound=lower,
     upper_bound=upper,
     **kwargs
