@@ -3,7 +3,6 @@ import re
 import datasets
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
-
 from furax_cs.data.instruments import get_instrument
 
 from ..logging_utils import (

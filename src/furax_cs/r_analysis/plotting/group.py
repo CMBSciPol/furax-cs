@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Array, Float
 
-from ...logging_utils import warning , debug
+from ...logging_utils import debug, warning
 from . import get_run_color, save_or_show
 
 font_size = 22

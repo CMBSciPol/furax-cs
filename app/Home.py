@@ -30,9 +30,7 @@ PLOTLY_COLORS = [
 MAX_RUNS = 4
 
 # Matches section_42 kw (with GAL) and section_41 kw (without GAL)
-KW_PATTERN = re.compile(
-    r"BD(?P<BD>\d+)_TD(?P<TD>\d+)_BS(?P<BS>\d+)(?:_GAL(?P<GAL>\d+))?"
-)
+KW_PATTERN = re.compile(r"BD(?P<BD>\d+)_TD(?P<TD>\d+)_BS(?P<BS>\d+)(?:_GAL(?P<GAL>\d+))?")
 
 # Image keys and their labels
 PATCH_KEYS = [
@@ -141,9 +139,7 @@ def unique_sorted(values: list[str]) -> list[str]:
         return uniq
 
 
-def cascading_options(
-    meta: list[dict], filters: dict[str, str | None]
-) -> list[dict]:
+def cascading_options(meta: list[dict], filters: dict[str, str | None]) -> list[dict]:
     """Filter metadata rows by current filter selections (cascade)."""
     result = meta
     for key, val in filters.items():
@@ -341,21 +337,27 @@ def build_cl_residuals_plot(runs: list[dict]) -> go.Figure:
     # Style legend entries
     fig.add_trace(
         go.Scatter(
-            x=[None], y=[None], mode="lines",
+            x=[None],
+            y=[None],
+            mode="lines",
             line=dict(color="black", dash="dash"),
             name="Total (C_ℓ^res)",
         )
     )
     fig.add_trace(
         go.Scatter(
-            x=[None], y=[None], mode="lines",
+            x=[None],
+            y=[None],
+            mode="lines",
             line=dict(color="black"),
             name="Systematic (C_ℓ^syst)",
         )
     )
     fig.add_trace(
         go.Scatter(
-            x=[None], y=[None], mode="lines",
+            x=[None],
+            y=[None],
+            mode="lines",
             line=dict(color="black", dash="dot"),
             name="Statistical (C_ℓ^stat)",
         )
@@ -364,7 +366,9 @@ def build_cl_residuals_plot(runs: list[dict]) -> go.Figure:
         color = PLOTLY_COLORS[i % len(PLOTLY_COLORS)]
         fig.add_trace(
             go.Scatter(
-                x=[None], y=[None], mode="lines",
+                x=[None],
+                y=[None],
+                mode="lines",
                 line=dict(color=color, width=2),
                 name=run["meta"]["name"],
             )
@@ -415,7 +419,9 @@ def run_selector(
             if f"gal_{slot}" in st.session_state:
                 del st.session_state[f"gal_{slot}"]
             st.selectbox(
-                "GAL (mask)", ["ALL-GALACTIC"], disabled=True,
+                "GAL (mask)",
+                ["ALL-GALACTIC"],
+                disabled=True,
                 key=f"gal_disabled_{slot}",
             )
 

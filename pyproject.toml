@@ -33,19 +33,19 @@ all = [
   "furax-cs[plotting,dev,benchmarks,io,docs]"
 ]
 benchmarks = ["jax-hpc-profiler>=v0.3.2"]
+dev = [
+  "ruff",
+  "pre-commit",
+  "jupyter",
+  "pytest"
+]
 docs = [
   "sphinx>=7.0",
   "furo",
   "myst-parser>=2.0",
   "nbsphinx>=0.9",
   "sphinx-copybutton",
-  "ipykernel",
-]
-dev = [
-  "ruff",
-  "pre-commit",
-  "jupyter",
-  "pytest"
+  "ipykernel"
 ]
 io = ["datasets", "Pillow"]
 plotting = [
@@ -56,8 +56,8 @@ plotting = [
 
 [project.scripts]
 bench-bcp = "furax_cs.scripts.bench_bcp:main"
-compute-mr = "furax_cs.scripts.compute_mr:main"
 bench-clusters = "furax_cs.scripts.bench_clusters:main"
+compute-mr = "furax_cs.scripts.compute_mr:main"
 distributed-gridding = "furax_cs.scripts.distributed_gridding:main"
 fgbuster-model = "furax_cs.scripts.fgbuster_model:main"
 generate_data = "furax_cs.data.generate_maps:main"
