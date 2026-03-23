@@ -20,7 +20,7 @@ The main tool is the minimizer provided under the name of Furax ADABK which is a
 The minimizer is orders of magnitude faster than traditional minimizers such as Scipy-TNC and is able to reach lower minima in fewer iterations.
 
 <p align="center">
-  <img src="notebooks/runtime_comparison.png" alt="Runtime Comparison" width="400"/>
+  <img src="docs/images/runtime_comparison.png" alt="Runtime Comparison" width="400"/>
 </p>
 
 This provides a much easier and faster way to explore the spatial variability of foregrounds and their impact on the CMB recovery.
