@@ -72,7 +72,7 @@ negative_log_likelihood_fn = partial(
 )
 
 instrument = get_instrument("LiteBIRD")
-noised_d, N = generate_noise_operator(
+noised_d, N,_ = generate_noise_operator(
     jax.random.key(0),
     noise_ratio=0.3,
     indices=indices,
@@ -103,7 +103,7 @@ upper = {"beta_dust": 3.0, "temp_dust": 40.0, "beta_pl": -1.0}
 final_params, final_state = minimize(
     fn=negative_log_likelihood_fn,
     init_params=initial_params,
-    solver_name="active_set",
+    solver_name="ADABK0",
     max_iter=1000,
     atol=1e-15,
     rtol=1e-10,
@@ -116,7 +116,7 @@ final_params, final_state = minimize(
 )
 
 # Check convergence
-print(f"Best loss: {final_state.state.best_loss:.6e}")
+print(f"Best loss: {final_state.best_loss:.6e}")
 
 reconstructed_cmb = sky_signal_fn(
     final_params, nu=nu, d=noised_d, N=N, patch_indices=guess_clusters

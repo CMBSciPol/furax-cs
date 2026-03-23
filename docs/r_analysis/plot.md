@@ -32,7 +32,6 @@ These generate one plot per run entry in the parquet file:
 |---|---|
 | `-pp`, `--plot-params` | Spectral parameter maps ($\beta_d$, $T_d$, $\beta_s$) |
 | `-pt`, `--plot-patches` | Patch/cluster assignment maps |
-| `-pv`, `--plot-validation-curves` | Validation curves |
 | `-ps`, `--plot-cl-spectra` | $C_\ell^{BB}$ power spectra (one per run) |
 | `-pc`, `--plot-cmb-recon` | CMB Q/U reconstruction maps |
 | `-psm`, `--plot-systematic-maps` | Systematic residual maps |

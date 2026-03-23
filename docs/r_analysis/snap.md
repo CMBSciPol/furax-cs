@@ -61,15 +61,6 @@ You can use a partial pattern to match folders across different mask configurati
 r_analysis snap -r "BD4000_TD500_BS500" -ird results/ -o out.parquet
 ```
 
-### OR Groups
-
-Within token mode, you can use `(option1|option2)` to match either token:
-
-```bash
-# Match runs that are either kmeans OR ptep
-r_analysis snap -r "(kmeans|ptep)_BD4000" -ird results/ -o out.parquet
-```
-
 ## Combining Runs
 
 ### `--combine`
@@ -95,6 +86,9 @@ r_analysis snap -r "kmeans_BD4000" "ptep_BD64" \
     -o out.parquet
 ```
 
+by default, the display name is the matched pattern (e.g., `BD4000_TD500_BS500`).
+For combined runs, it is recommended to give an explicit name so it easier to match when plotting using [plot](plot.md)
+
 ## Post-Clustering Binning
 
 Re-bin spectral parameters after clustering to reduce the number of patches:
@@ -110,6 +104,8 @@ r_analysis snap -r "kmeans_BD10000" -ird results/ \
 | `--bin-bd` | Number of bins for $\beta_\mathrm{dust}$ |
 | `--bin-td` | Number of bins for $T_\mathrm{dust}$ |
 | `--bin-bs` | Number of bins for $\beta_\mathrm{synch}$ |
+
+This will recache the systematics using the binned parameter maps and re-compute all statistics.
 
 ## All Arguments
 
