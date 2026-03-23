@@ -34,7 +34,7 @@ def plot_params(
     _ = plt.figure(figsize=fig_size)
 
     keys = ["beta_dust", "temp_dust", "beta_pl"]
-    names = [r"$\beta_d$", r"$T_d$", r"$\beta_s$"]
+    names = [r"$\beta_d$", r"$T_d$ [K]", r"$\beta_s$"]
 
     for i, (key, param_name) in enumerate(zip(keys, names)):
         param_map = params[key]
@@ -373,7 +373,7 @@ def plot_r_estimator(
     plt.axvline(0.0, color="purple", linestyle="--", alpha=0.8, label="True r=0")
     plt.title(r"Estimated $r$ residual")
     plt.xlabel(r"$r$")
-    plt.ylabel("Relative Likelihood")
+    plt.ylabel("Likelihood")
     plt.grid(True)
     if xlim:
         plt.xlim(*xlim)

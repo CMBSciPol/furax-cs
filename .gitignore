@@ -70,6 +70,8 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/_static/
+docs/notebooks/
 
 # PyBuilder
 .pybuilder/
@@ -244,3 +246,4 @@ slurm/*
 !slurm/runners
 !slurm/minimize_validation.py
 furax-cs-tex
+furax-cs-Poster

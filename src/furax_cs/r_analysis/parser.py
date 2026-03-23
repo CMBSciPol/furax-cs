@@ -156,6 +156,24 @@ ARGUMENT NOTES:
         default=None,
         help="Maximum number of entries per parquet file. Splits into numbered files if exceeded.",
     )
+    parser_snap.add_argument(
+        "--bin-bd",
+        type=int,
+        default=None,
+        help="Number of bins for beta_dust parameter (post-clustering binning).",
+    )
+    parser_snap.add_argument(
+        "--bin-td",
+        type=int,
+        default=None,
+        help="Number of bins for temp_dust parameter (post-clustering binning).",
+    )
+    parser_snap.add_argument(
+        "--bin-bs",
+        type=int,
+        default=None,
+        help="Number of bins for beta_synchrotron parameter (post-clustering binning).",
+    )
 
     # ==========================================
     # 2. PLOT SUBCOMMAND
@@ -292,6 +310,22 @@ ARGUMENT NOTES:
         metavar=("W", "H"),
         default=None,
         help="Figure size for BB spectra plots in inches (e.g. --s-figsize 10 8)",
+    )
+    parser_plot.add_argument(
+        "--r-range",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        default=None,
+        help="r fill-between range for BB spectra plot (e.g. --r-range 1e-3 4e-3)",
+    )
+    parser_plot.add_argument(
+        "--r-plot",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        default=None,
+        help="Two truth r values plotted as separate lines in BB spectra + vertical lines in r-likelihood (e.g. --r-plot 0 3e-3)",
     )
 
     # Visualization Toggles

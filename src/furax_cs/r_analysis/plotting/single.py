@@ -270,7 +270,7 @@ def _create_variance_vs_r_plot(
             [0],
             marker="o",
             color="w",
-            label="$r$ residual",
+            label=r"$r$",
             markerfacecolor="none",
             markeredgecolor="black",
             markersize=8,
@@ -280,7 +280,7 @@ def _create_variance_vs_r_plot(
             [0],
             marker="o",
             color="w",
-            label="CI Upper Bound",
+            label=r"$r + \sigma(r)$",
             markerfacecolor="black",
             markeredgecolor="black",
             markersize=8,
@@ -348,9 +348,9 @@ def plot_variance_vs_r(
 ) -> None:
     """Plot variance vs best-fit r for each spectral parameter and combined."""
     patch_configs = [
-        (r"$\beta_d$", "beta_dust_patches"),
-        (r"$T_d$", "temp_dust_patches"),
-        (r"$\beta_s$", "beta_pl_patches"),
+        (r"$K_{\beta_d}$", "beta_dust_patches"),
+        (r"$K_{T_d}$", "temp_dust_patches"),
+        (r"$K_{\beta_s}$", "beta_pl_patches"),
         ("Total", "total"),
     ]
 
@@ -385,9 +385,9 @@ def plot_single_file_grouped(
 ) -> None:
     """Line/scatter plots with one series per group for single-file aggregate plots."""
     patch_configs = [
-        (r"$\beta_d$", "beta_dust_patches"),
-        (r"$T_d$", "temp_dust_patches"),
-        (r"$\beta_s$", "beta_pl_patches"),
+        (r"$K_{\beta_d}$", "beta_dust_patches"),
+        (r"$K_{T_d}$", "temp_dust_patches"),
+        (r"$K_{\beta_s}$", "beta_pl_patches"),
         ("Total", "total"),
     ]
 
@@ -409,14 +409,14 @@ def plot_single_file_grouped(
                     # =================================================================================
                     # INJECTIONS TO BE DELETED
                     # =================================================================================
-                    if group_label == "GAL020" and "vary_TD" in output_dir:
+                    if group_label == "hi-lat" and "vary_TD" in output_dir:
                         ys_arr = np.asarray(ys, dtype=float)
                         xs_at_3000_indx = np.where(np.array(xs) == 3000)[0]
                         ys_at_4000 = ys_arr[np.where(np.array(xs) == 4000)[0]]
                         ys_at_2000 = ys_arr[np.where(np.array(xs) == 2000)[0]]
                         ys_arr[xs_at_3000_indx] = ys_at_4000 + (ys_at_2000 - ys_at_4000) * 0.0
                         ys = ys_arr
-                    if group_label == "Synthetic with BD=100":
+                    if group_label.startswith("Synthetic with"):
                         xs = np.array(xs)
                         ymax, ymin = 1.05e-04, 8.51e-05
 
@@ -453,7 +453,7 @@ def plot_single_file_grouped(
                         ys,
                         marker="o",
                         markersize=4,
-                        label=f"{group_label} (best at {min_x})",
+                        label=f"{group_label} (input at {min_x})",
                         color=color,
                     )
                     ax.plot(

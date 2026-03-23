@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Array, Float
 
-from ...logging_utils import warning
+from ...logging_utils import debug, warning
 from . import get_run_color, save_or_show
 
 font_size = 22
@@ -22,6 +22,8 @@ def plot_all_cl_residuals(
     colors: list[str] | None = None,
     legend_anchor: tuple[float, float] | None = None,
     figsize: tuple[float, float] | None = None,
+    r_range: tuple[float, float] | None = None,
+    r_plot: tuple[float, float] | None = None,
 ) -> None:
     """Overlay residual BB spectra with a simple legend for line styles only."""
 
@@ -43,15 +45,38 @@ def plot_all_cl_residuals(
         ell_range = cl_pytree_list[0]["ell_range"]
         cl_bb_lens = cl_pytree_list[0]["cl_bb_lens"]
 
-        r_lo, r_hi = 1e-3, 4e-3
-        plt.fill_between(
-            ell_range,
-            r_lo * cl_bb_r1,
-            r_hi * cl_bb_r1,
-            color="grey",
-            alpha=0.35,
-            label=r"$C_\ell^{BB},\; r\in[10^{-3},\,4\cdot10^{-3}]$",
-        )
+        if r_plot is not None:
+            for r_val in r_plot:
+                debug(f"Plotting r={r_val:.0e} line for BB spectrum")
+                if r_val > 0:
+                    plt.plot(
+                        ell_range,
+                        r_val * cl_bb_r1,
+                        color="grey",
+                        linestyle="--",
+                        linewidth=1.5,
+                        label=rf"$C_\ell^{{BB}},\; r={r_val:.0e}$",
+                    )
+        elif r_range is not None:
+            r_lo, r_hi = r_range
+            plt.fill_between(
+                ell_range,
+                r_lo * cl_bb_r1,
+                r_hi * cl_bb_r1,
+                color="grey",
+                alpha=0.35,
+                label=rf"$C_\ell^{{BB}},\; r\in[{r_lo:.0e},\,{r_hi:.0e}]$",
+            )
+        else:
+            r_lo, r_hi = 1e-3, 4e-3
+            plt.fill_between(
+                ell_range,
+                r_lo * cl_bb_r1,
+                r_hi * cl_bb_r1,
+                color="grey",
+                alpha=0.35,
+                label=r"$C_\ell^{BB},\; r\in[10^{-3},\,4\cdot10^{-3}]$",
+            )
 
         plt.plot(
             ell_range,
@@ -227,6 +252,7 @@ def plot_all_r_estimation(
     xlim: tuple[float, float] | None = None,
     legend_anchor: tuple[float, float] | None = None,
     figsize: tuple[float, float] | None = None,
+    r_plot: tuple[float, float] | None = None,
 ) -> None:
     """Compare r likelihood curves across runs in a single figure."""
 
@@ -278,10 +304,18 @@ def plot_all_r_estimation(
                 alpha=0.7,
             )
 
-        # plt.axvline(x=0.0, color="black", linestyle="--", alpha=0.7, label="True r=0")
+        if r_plot is not None:
+            for r_truth in r_plot:
+                plt.axvline(
+                    x=r_truth,
+                    color="black",
+                    linestyle="--",
+                    alpha=0.7,
+                    label=rf"Truth $r={r_truth:.0e}$",
+                )
 
         plt.xlabel(r"$r$")
-        plt.ylabel("Relative Likelihood")
+        plt.ylabel("Likelihood")
         if xlim:
             plt.xlim(*xlim)
         else:
