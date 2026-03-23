@@ -345,9 +345,6 @@ ARGUMENT NOTES:
         "-pt", "--plot-patches", action="store_true", help="Plot patch assignments"
     )
     vis_group.add_argument(
-        "-pv", "--plot-validation-curves", action="store_true", help="Plot validation curves"
-    )
-    vis_group.add_argument(
         "-ps", "--plot-cl-spectra", action="store_true", help="Plot spectra (one by one)"
     )
     vis_group.add_argument(

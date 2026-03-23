@@ -46,7 +46,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         - needs_residual_spectra: bool
         - needs_r_estimation: bool
         - need_patch_maps: bool
-        - need_validation_curves: bool
         - compute_syst: bool
         - compute_stat: bool
         - compute_total: bool
@@ -57,7 +56,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
             "needs_residual_spectra": True,
             "needs_r_estimation": True,
             "need_patch_maps": True,
-            "need_validation_curves": True,
             "compute_syst": True,
             "compute_stat": True,
             "compute_total": True,
@@ -77,7 +75,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
     plot_illustrations = getattr(args, "plot_illustrations", False)
     plot_params = getattr(args, "plot_params", False)
     plot_patches = getattr(args, "plot_patches", False)
-    plot_validation_curves = getattr(args, "plot_validation_curves", False)
     plot_params_residuals = getattr(args, "plot_params_residuals", False)
     plot_all_histograms = getattr(args, "plot_all_histograms", False)
 
@@ -101,8 +98,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         or plot_params_residuals
         or plot_all_histograms
     )
-    need_validation_curves = plot_validation_curves or plot_all
-
     compute_syst = needs_residual_spectra or needs_residual_maps
     compute_stat = compute_syst or needs_r_estimation
     compute_total = needs_r_estimation
@@ -112,7 +107,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         "needs_residual_spectra": needs_residual_spectra,
         "needs_r_estimation": needs_r_estimation,
         "need_patch_maps": need_patch_maps,
-        "need_validation_curves": need_validation_curves,
         "compute_syst": compute_syst,
         "compute_stat": compute_stat,
         "compute_total": compute_total,
@@ -257,7 +251,6 @@ def _compute_single_folder(
         }
 
     info(f"Finished processing folder '{folder}' for run index {run_index}")
-    # Extract validation curves if needed
     return {
         "cmb_recon": cmb_recon,
         "cmb_true": cmb_true,
@@ -446,7 +439,7 @@ def compute_group(
     cl_true = compute_cl_true_bb(s_true, ell_range)
 
     # Cl BB sum for illustrations
-    if flags["need_patch_maps"] or flags["need_validation_curves"]:
+    if flags["need_patch_maps"]:
         cl_bb_sum = compute_cl_bb_sum(combined_cmb_recon, f_sky, ell_range)
     else:
         cl_bb_sum = None
