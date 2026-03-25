@@ -54,6 +54,7 @@ kmeans-model -n 64 -pc 10000 500 500 -m GAL020 -tag c1d1s1
 |---|---|---|---|
 | `-n`, `--nside` | `int` | `64` | HEALPix resolution |
 | `-pc`, `--patch-count` | `int int int` | `10000 500 500` | Cluster counts for $[\beta_d, T_d, \beta_s]$ |
+| `-c`, `--clusters` | `str str str` | none | Cluster source for $[\beta_d, T_d, \beta_s]$. Overrides `-pc`. See [below](#cluster-sources-c). |
 | `-m`, `--mask` | `str` | `GAL020_U` | Galactic mask (see Masks section below) |
 | `-tag`, `--tag` | `str` | `c1d1s1` | Sky simulation tag |
 | `-ns`, `--noise-sim` | `int` | `1` | Number of noise realizations |
@@ -72,6 +73,33 @@ kmeans-model -n 64 -pc 10000 500 500 -m GAL020 -tag c1d1s1
 | `--rtol` | `float` | `1e-16` | Relative convergence tolerance |
 | `-o`, `--output` | `str` | `results` | Output directory |
 | `--name` | `str` | auto | Override output folder name |
+
+### Cluster Sources (`-c`)
+
+The `-c` flag provides fine-grained control over how clusters are defined for each spectral parameter. It accepts exactly three values, one for each of $[\beta_d, T_d, \beta_s]$:
+
+| Value | Meaning |
+|---|---|
+| `true` | Use precomputed pixel subsets derived from true parameter values. Only available for `-tag c1d1s1`. |
+| *integer* | Run K-means clustering with this many clusters (same as `-pc`). |
+| *path to `.npy`* | Load a full-sky patches file (e.g., produced by [`r_analysis bin`](r_analysis/bin.md)). |
+
+Values can be mixed freely. When `-c` is provided, it overrides `-pc` entirely.
+
+**Examples:**
+
+```bash
+# Use precomputed true-parameter subsets for all three parameters
+kmeans-model -n 64 -c true true true -m GAL020 -tag c1d1s1
+
+# Use binned patches from r_analysis bin
+kmeans-model -n 64 \
+    -c binned/patches_beta_dust.npy binned/patches_temp_dust.npy binned/patches_beta_pl.npy \
+    -m GAL020 -tag c1d1s1
+
+# Mix: true for beta_dust, 50 K-means clusters for temp_dust, file for beta_synch
+kmeans-model -n 64 -c true 50 binned/patches_beta_pl.npy -m GAL020 -tag c1d1s1
+```
 
 ---
 
