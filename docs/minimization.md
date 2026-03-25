@@ -7,16 +7,111 @@
 The `solver_name` argument in the `minimize` function accepts the following:
 
 ### Recommended
-*   **`active_set`**: **Best for noisy maps.** Uses a projected gradient method with active set constraints. Robust against noise but might be slower on very clean data.
-*   **`optax_lbfgs`**: **Best for noiseless runs.** L-BFGS with zoom linesearch (Strong Wolfe conditions). Very fast and accurate for smooth, noise-free landscapes.
+*   **`ADABK0`**: **Best for noisy maps.** Active-set method with AdaBelief direction and Top-K constraint release (K=0, i.e. one constraint released per iteration). Very robust in low-SNR regions. See [How ADABK Works](#how-adabk-works) below.
+*   **`optax_lbfgs`**: **Best for noiseless runs (systematics).** L-BFGS with zoom linesearch (Strong Wolfe conditions). Very fast and accurate for smooth, noise-free landscapes.
 
 ### Other Options
-*   `optax_lbfgs`: L-BFGS.
-*   `adam`: Simple Adam optimizer (good for stochastic settings).
-*   `scipy_tnc`: Wrapper for SciPy's Truncated Newton (TNC).
-*   `optimistix_bfgs`: Standard BFGS from Optimistix.
-*   `optimistix_lbfgs`: Standard L-BFGS from Optimistix.
-*   `optimistix_ncg_*`: Nonlinear Conjugate Gradient variants (`pr`, `hs`, `fr`, `dy`).
+
+**Active set variants** (self-conditioned):
+
+*   `ADABK{N}` — AdaBelief + Top-K active set. `N * 0.1` = fraction of constraints released per step. `ADABK0` releases 1 constraint/step (most stable), `ADABK5` releases up to 50%. (see [How ADABK Works](#how-adabk-works) and paper for more info)
+*   `active_set` — Active set with Adam direction.
+*   `active_set_sgd` — Active set with SGD direction.
+*   `active_set_adabelief` — Active set with AdaBelief direction.
+*   `active_set_adaw` — Active set with AdamW direction.
+
+**Optax L-BFGS:**
+
+*   `optax_lbfgs` — L-BFGS with zoom linesearch (default) or backtracking.
+
+**Optax first-order:**
+
+*   `adam` — Adam optimizer.
+*   `sgd` — SGD with backtracking linesearch.
+*   `adabelief` — AdaBelief optimizer.
+*   `adaw` / `adamw` — AdamW optimizer.
+
+**Optimistix:**
+
+*   `optimistix_bfgs` — Full BFGS.
+*   `optimistix_lbfgs` — Limited-memory BFGS.
+*   `optimistix_ncg_pr` — Nonlinear Conjugate Gradient (Polak-Ribière).
+*   `optimistix_ncg_hs` — Nonlinear Conjugate Gradient (Hestenes-Stiefel).
+*   `optimistix_ncg_fr` — Nonlinear Conjugate Gradient (Fletcher-Reeves).
+*   `optimistix_ncg_dy` — Nonlinear Conjugate Gradient (Dai-Yuan).
+
+**SciPy** (self-conditioned):
+
+*   `scipy_tnc` — Truncated Newton (TNC).
+*   `scipy_cobyqa` — COBYQA (derivative-free constrained optimizer).
+
+
+## How ADABK Works
+
+ADABK (Adaptive AdaBelief with Top-K Active Set, also called **AdaTopK** in the paper) is a JAX-native optimizer that combines the TNC active-set constraint strategy with the AdaBelief adaptive gradient method.
+
+### Internal parameter space
+
+Physical parameters **x** (bounded by **l**, **u**) are mapped to a normalized [0, 1] representation via an affine transform:
+
+**y** = (**x** − **l**) / (**u** − **l**)
+
+This normalizes the optimization landscape and ensures consistent step sizes across parameters with different physical scales.
+
+### Active set and pivot vector
+
+Each parameter has a pivot value p_i:
+
+*   p_i = −1: parameter is at the lower bound (active constraint)
+*   p_i = +1: parameter is at the upper bound (active constraint)
+*   p_i = 0: parameter is free
+
+Only free parameters (p_i = 0) are optimized at each iteration.
+
+### Top-K constraint release
+
+At each iteration, a release score is computed for every active constraint:
+
+score_i = p_i × (−g_i)
+
+A positive score means the negative gradient points into the feasible region — releasing this constraint could decrease the objective. The Top-K fraction K controls how many constraints are released per iteration:
+
+*   **K = 0** (`ADABK0`): releases 1 constraint at a time. Most stable, consistently reaches the lowest objective values.
+*   **K = N** (`ADABK{N}`): releases up to `N × 0.1` fraction of active constraints.
+
+### Projected gradient and AdaBelief direction
+
+Gradients for active constraints are zeroed out: **g_proj** = **g** ⊙ (p = 0). The projected gradient is then fed to AdaBelief, which adapts step sizes based on gradient variance. This makes it better suited to noisy gradient landscapes (low-SNR regions) than classical quasi-Newton methods (L-BFGS, TNC) which tend to reset their curvature history when gradients are unreliable.
+
+### Dynamic state rescaling
+
+When the gradient norm falls outside [10⁻¹⁵, 10¹⁵], the cost function and AdaBelief moment estimates are rescaled:
+
+**m** ← f_scale · **m** ,  **v** ← f_scale² · **v**
+
+This prevents numerical under/overflow across the extreme dynamic range between the bright Galactic plane and faint high-latitude sky, without resetting the optimizer's momentum.
+
+### Bounded line search
+
+The step size α is capped at the distance to the nearest bound (α_max), then a line search finds the optimal α in [0, α_max]. If a parameter hits a bound, it becomes an active constraint.
+
+## Conditioning
+
+Conditioning (preconditioning) transforms the optimization problem to improve convergence. It applies two transformations before optimization:
+
+1.  **Parameter scaling**: min-max normalization to [0, 1] based on bounds.
+2.  **Gradient scaling**: the objective is scaled by 1/‖∇f‖ at initialization (like SciPy TNC's `fscale`), so the initial gradient norm is ≈ 1.
+
+### Self-conditioned solvers
+
+These solvers handle conditioning internally and ignore the `precondition` flag:
+
+*   **Active set variants** (`active_set`, `active_set_sgd`, `active_set_adabelief`, `active_set_adaw`, `ADABK{N}`) — use internal affine transform + dynamic state rescaling.
+*   **SciPy solvers** (`scipy_tnc`, `scipy_cobyqa`) — SciPy handles bounds and scaling internally.
+
+### Externally conditioned solvers
+
+All other solvers (`optax_lbfgs`, `adam`, `optimistix_*`, etc.) benefit from external conditioning when dealing with poorly scaled problems. Pass `precondition=True` (or a custom scaling function) to `minimize`.
 
 ## Minimizing Programmatically
 
@@ -34,7 +129,7 @@ final_params, state = minimize(
 )
 ```
 
-### Advanced: Steping interactively with Solvers
+### Advanced: Stepping Interactively with Solvers
 
 Since most solvers (except SciPy) are JAX-compatible, you can step through the optimization process manually. This is useful for custom logging or adaptive strategies.
 
