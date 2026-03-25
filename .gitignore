@@ -180,6 +180,7 @@ results*
 *.npy
 *.pdf
 !src/furax_cs/data/masks/GAL_PlanckMasks_2048.npz
+!src/furax_cs/data/pixelsubset/*
 
 
 # LaTeX intermediate files

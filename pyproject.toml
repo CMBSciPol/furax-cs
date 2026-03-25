@@ -107,4 +107,4 @@ package-dir = {"" = "src"}
 packages = {find = {include = ["furax_cs*"], where = ["src"]}}
 
 [tool.setuptools.package-data]
-"furax_cs.data" = ["*.yaml", "masks/*"]
+"furax_cs.data" = ["*.yaml", "masks/*", "pixelsubset/*"]
