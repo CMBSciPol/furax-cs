@@ -3,6 +3,7 @@
 from importlib import metadata
 
 from . import r_analysis
+from .binning import bin_parameter_map
 from .data import (
     MASK_CHOICES,
     CMBLensedWithTensors,
@@ -40,6 +41,7 @@ from .optim import (
 )
 
 __all__ = [
+    "bin_parameter_map",
     "kmeans_clusters",
     "multires_clusters",
     "generate_noise_operator",

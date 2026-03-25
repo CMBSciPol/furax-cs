@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, NamedTuple, Optional, Union
+from typing import Any, NamedTuple, Union
 
 import jax
 import jax.lax as lax
@@ -286,11 +286,11 @@ class ActiveSetState(NamedTuple):
 def active_set(
     direction_solver: optax.GradientTransformation,
     linesearch_solver: optax.GradientTransformation,
-    lower: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower: PyTree[Float[Array, " P"]] | None = None,
+    upper: PyTree[Float[Array, " P"]] | None = None,
     rescale_threshold: float = 1.3,
     stepmx_init: float = 10.0,
-    max_constraints_to_release: Optional[Union[int, float]] = None,
+    max_constraints_to_release: Union[int, float] | None = None,
     verbose: bool = False,
 ) -> optax.GradientTransformation:
     def init_fn(params: PyTree[Float[Array, " P"]]) -> ActiveSetState:
@@ -353,10 +353,10 @@ def active_set(
     def update_fn(
         grads: PyTree[Float[Array, " P"]],
         state: ActiveSetState,
-        params: Optional[PyTree[Float[Array, " P"]]] = None,
-        value: Optional[Scalar] = None,
-        grad: Optional[PyTree[Float[Array, " P"]]] = None,
-        value_fn: Optional[Callable[[PyTree[Float[Array, " P"]]], Scalar]] = None,
+        params: PyTree[Float[Array, " P"]] | None = None,
+        value: Scalar | None = None,
+        grad: PyTree[Float[Array, " P"]] | None = None,
+        value_fn: Callable[[PyTree[Float[Array, " P"]]], Scalar] | None = None,
         **kwargs: Any,
     ) -> tuple[PyTree[Float[Array, " P"]], ActiveSetState]:
         if params is None or value_fn is None:

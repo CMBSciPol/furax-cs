@@ -26,6 +26,12 @@
 .. autofunction:: furax_cs.optim.solvers.get_solver
 ```
 
+## Binning
+
+```{eval-rst}
+.. autofunction:: furax_cs.binning.bin_parameter_map
+```
+
 ## Data
 
 ```{eval-rst}

@@ -5,7 +5,7 @@ creating noise covariance operators used in likelihood computations.
 """
 
 from functools import partial
-from typing import Literal, Optional
+from typing import Literal
 
 import jax
 import jax.numpy as jnp
@@ -25,7 +25,7 @@ def generate_noise_operator(
     nside: int,
     masked_d: Stokes,
     instrument: FGBusterInstrument,
-    stokes_type: Optional[Literal["QU", "IQU"]] = None,
+    stokes_type: Literal["QU", "IQU"] | None = None,
 ) -> tuple[Stokes, NoiseDiagonalOperator, Stokes]:
     """Generate noised data and corresponding noise covariance operator.
 

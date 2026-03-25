@@ -30,6 +30,7 @@ except ImportError:
 
 from furax.obs import negative_log_likelihood, spectral_cmb_variance
 from furax.obs.stokes import Stokes
+
 from furax_cs import (
     generate_noise_operator,
     kmeans_clusters,

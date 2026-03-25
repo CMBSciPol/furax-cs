@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import equinox as eqx
 import jax
@@ -52,8 +52,8 @@ class ScipyMinimizeState(eqx.Module):
 def scipy_minimize(
     fn: Callable[..., Scalar],
     init_params: PyTree[Float[Array, " P"]],
-    lower_bound: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper_bound: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower_bound: PyTree[Float[Array, " P"]] | None = None,
+    upper_bound: PyTree[Float[Array, " P"]] | None = None,
     method: str = "tnc",
     maxiter: int = 1000,
     **fn_kwargs: Any,
@@ -191,8 +191,8 @@ def minimize(
     max_iter: int = 1000,
     rtol: float = 1e-8,
     atol: float = 1e-8,
-    lower_bound: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper_bound: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower_bound: PyTree[Float[Array, " P"]] | None = None,
+    upper_bound: PyTree[Float[Array, " P"]] | None = None,
     precondition: bool = False,
     solver_options: dict[str, Any] = {},
     refresh_steps: int = 10,

@@ -26,7 +26,6 @@ from .residuals import (
     compute_total_res,
 )
 from .utils import (
-    bin_patches,
     expand_stokes,
     index_run_data,
     params_to_maps,
@@ -143,8 +142,6 @@ def _compute_single_folder(
     full_results: dict[str, Array] | None = None,
     max_iter: int = 100,
     solver_name: str = "optax_lbfgs",
-    bin_config: dict[str, int] | None = None,
-    noise_selection: str = "min-value",
 ) -> dict[str, Any] | None:
     """Process a single result folder for a specific run index.
 
@@ -187,10 +184,6 @@ def _compute_single_folder(
     # Slice the specific run data
     run_data = index_run_data(full_results, run_index)
 
-    # Apply parameter binning before any downstream computation
-    if bin_config:
-        run_data = bin_patches(run_data, bin_config, noise_selection)
-
     (indices,) = jnp.where(mask == 1)
 
     # Extract CMB data
@@ -201,11 +194,7 @@ def _compute_single_folder(
     # Compute W_D_FG if needed for systematic residuals
     wd = None
     if flags["compute_syst"]:
-        bin_suffix = ""
-        if bin_config:
-            parts = sorted(f"{k}{v}" for k, v in bin_config.items())
-            bin_suffix = "_bin_" + "_".join(parts)
-        cache_key = f"W_D_FG_{run_index}{bin_suffix}"
+        cache_key = f"W_D_FG_{run_index}"
         if cache_key in full_results:
             info(f"Systematics cached for index {run_index}. Loading from cache...")
             cached_w = full_results[cache_key]
@@ -250,6 +239,10 @@ def _compute_single_folder(
             "beta_pl": run_data.get("beta_pl"),
         }
 
+    # Foreground-only maps for parquet storage (rebinning support)
+    fg_nocmb_q = best_params["I_D_NOCMB"][:, 0]  # (n_freq, npix_masked)
+    fg_nocmb_u = best_params["I_D_NOCMB"][:, 1]  # (n_freq, npix_masked)
+
     info(f"Finished processing folder '{folder}' for run index {run_index}")
     return {
         "cmb_recon": cmb_recon,
@@ -262,6 +255,8 @@ def _compute_single_folder(
         "patches": patches,
         "run_data": run_data,
         "best_params": best_params,
+        "fg_nocmb_q": fg_nocmb_q,
+        "fg_nocmb_u": fg_nocmb_u,
     }
 
 
@@ -276,7 +271,6 @@ def compute_group(
     max_iter: int = 100,
     noise_selection: str = "min-value",
     sky_tag: str = "c1d0s0",
-    bin_config: dict[str, int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]] | None:
     """Process a group of folders for given run indices.
 
@@ -306,6 +300,7 @@ def compute_group(
     cmb_recons, cmb_maps, masks = [], [], []
     indices_list, w_d_list, NLLs = [], [], []
     params_list, patches_list, raw_params_list = [], [], []
+    fg_q_list, fg_u_list, fg_indices_list = [], [], []
 
     previous_mask_size = {
         "beta_dust_patches": 0,
@@ -326,6 +321,7 @@ def compute_group(
             warning(f"Failed to load {results_path}: {e}")
             continue
 
+        fg_collected_for_folder = False
         for run_index in indices_spec:
             result = _compute_single_folder(
                 folder,
@@ -336,8 +332,6 @@ def compute_group(
                 full_results=full_results,
                 max_iter=max_iter,
                 solver_name=solver_name,
-                bin_config=bin_config,
-                noise_selection=noise_selection,
             )
             if result is None:
                 continue
@@ -350,6 +344,13 @@ def compute_group(
 
             if result["wd"] is not None:
                 w_d_list.append(result["wd"])
+
+            # Collect fg data once per folder (same across run indices)
+            if not fg_collected_for_folder and result.get("fg_nocmb_q") is not None:
+                fg_q_list.append(result["fg_nocmb_q"])
+                fg_u_list.append(result["fg_nocmb_u"])
+                fg_indices_list.append(result["indices"])
+                fg_collected_for_folder = True
 
             if result["params"] is not None and result["patches"] is not None:
                 params, raw_params, patches, previous_mask_size = params_to_maps(
@@ -373,6 +374,12 @@ def compute_group(
     wd = None
     if flags["compute_syst"] and len(w_d_list) > 0:
         wd = combine_masks(w_d_list, indices_list, nside)
+
+    # Combine foreground maps for parquet storage (rebinning support)
+    fg_nocmb_q, fg_nocmb_u = None, None
+    if fg_q_list:
+        fg_nocmb_q = combine_masks(fg_q_list, fg_indices_list, nside, axis=1)
+        fg_nocmb_u = combine_masks(fg_u_list, fg_indices_list, nside, axis=1)
 
     NLL_summed = np.sum(NLLs, axis=0)
 
@@ -503,6 +510,8 @@ def compute_group(
         "params_map": params_map,
         "true_params": true_params,
         "all_params": raw_params_list,
+        "fg_nocmb_q": fg_nocmb_q,
+        "fg_nocmb_u": fg_nocmb_u,
     }
 
     return (
@@ -524,7 +533,6 @@ def compute_all(
     titles: dict[str, str] | None = None,
     noise_selection: str = "min-value",
     sky_tag: str = "c1d0s0",
-    bin_config: dict[str, int] | None = None,
 ) -> OrderedDict[
     str, tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]
 ]:
@@ -569,7 +577,6 @@ def compute_all(
             solver_name=solver_name,
             noise_selection=noise_selection,
             sky_tag=sky_tag,
-            bin_config=bin_config,
         )
 
         if result is not None:

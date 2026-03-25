@@ -156,27 +156,49 @@ ARGUMENT NOTES:
         default=None,
         help="Maximum number of entries per parquet file. Splits into numbered files if exceeded.",
     )
-    parser_snap.add_argument(
+
+    # ==========================================
+    # 2. BIN SUBCOMMAND
+    # ==========================================
+    parser_bin = subparsers.add_parser(
+        "bin",
+        parents=[common_parser],
+        help="Bin spectral parameters and produce patches .npy files",
+    )
+    parser_bin.add_argument(
+        "-o",
+        "--output-dir",
+        type=str,
+        required=True,
+        help="Output directory for patches .npy files",
+    )
+    parser_bin.add_argument(
         "--bin-bd",
         type=int,
         default=None,
-        help="Number of bins for beta_dust parameter (post-clustering binning).",
+        help="Number of bins for beta_dust parameter",
     )
-    parser_snap.add_argument(
+    parser_bin.add_argument(
         "--bin-td",
         type=int,
         default=None,
-        help="Number of bins for temp_dust parameter (post-clustering binning).",
+        help="Number of bins for temp_dust parameter",
     )
-    parser_snap.add_argument(
+    parser_bin.add_argument(
         "--bin-bs",
         type=int,
         default=None,
-        help="Number of bins for beta_synchrotron parameter (post-clustering binning).",
+        help="Number of bins for beta_synchrotron parameter",
+    )
+    parser_bin.add_argument(
+        "--noise-selection",
+        type=str,
+        default="min-value",
+        help="Noise realization selection for bin edge definition: 'min-value', 'min-nll', or index",
     )
 
     # ==========================================
-    # 2. PLOT SUBCOMMAND
+    # 3. PLOT SUBCOMMAND
     # ==========================================
     # Minimal parent parser for plot (no -r/-ird/-n/--sky/-mi/-s needed)
     plot_common_parser = argparse.ArgumentParser(add_help=False)

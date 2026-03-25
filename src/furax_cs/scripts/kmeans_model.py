@@ -37,6 +37,7 @@ os.environ["EQX_ON_ERROR"] = "nan"
 
 import argparse
 from functools import partial
+from importlib.resources import files as pkg_files
 from typing import Any
 
 import jax
@@ -71,6 +72,8 @@ from furax.obs import (
     sky_signal,
 )
 from furax.obs.stokes import Stokes
+from jax_healpy.clustering import get_cutout_from_mask, normalize_by_first_occurrence
+
 from furax_cs import (
     MASK_CHOICES,
     generate_noise_operator,
@@ -84,9 +87,61 @@ from furax_cs import (
     sanitize_mask_name,
 )
 from furax_cs.logging_utils import info, success
-from jax_healpy.clustering import get_cutout_from_mask
 
 jax.config.update("jax_enable_x64", True)
+
+# Mapping from parameter name to precomputed pixel subset filename
+_PIXEL_SUBSET_FILES = {
+    "beta_dust": "pixel_subsets_from_true_d1_s1_Bd_nbins100.npy",
+    "temp_dust": "pixel_subsets_from_true_d1_s1_Td_nbins100.npy",
+    "beta_pl": "pixel_subsets_from_true_d1_s1_Bs_nbins100.npy",
+}
+
+
+def load_precomputed_clusters(param_name: str, indices: Array) -> tuple[Array, int]:
+    """Load precomputed pixel subset clusters for a parameter.
+
+    Returns the masked+normalized cluster array and the number of unique clusters.
+    """
+    filename = _PIXEL_SUBSET_FILES[param_name]
+    path = pkg_files("furax_cs").joinpath("data", "pixelsubset", filename)
+    full_sky = jnp.array(np.load(str(path)))
+    masked = full_sky[indices]
+    n_clusters = int(jnp.unique(masked).size)
+    normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
+    return normalized, n_clusters
+
+
+def load_patches_from_file(path: str, indices: Array) -> tuple[Array, int]:
+    """Load a full-sky patches .npy file and extract valid pixels.
+
+    The file should be a float64 array of shape ``(npix,)`` where valid pixels
+    have bin indices (0.0, 1.0, ...) and masked pixels have ``hp.UNSEEN``.
+
+    Returns the masked+normalized cluster array and the number of unique clusters.
+    """
+    full_sky = jnp.array(np.load(path))
+    masked = full_sky[indices].astype(jnp.int64)
+    n_clusters = int(jnp.unique(masked).size)
+    normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
+    return normalized, n_clusters
+
+
+def parse_cluster_specs(cluster_args: list[str]) -> dict[str, str | int]:
+    """Parse the -c argument values into a dict keyed by parameter name.
+
+    Returns dict mapping param name -> 'true', int count, or .npy file path.
+    """
+    param_names = ["beta_dust", "temp_dust", "beta_pl"]
+    specs = {}
+    for name, val in zip(param_names, cluster_args):
+        if val.lower() == "true":
+            specs[name] = "true"
+        elif val.endswith(".npy"):
+            specs[name] = val
+        else:
+            specs[name] = int(val)
+    return specs
 
 
 def parse_args() -> argparse.Namespace:
@@ -183,6 +238,22 @@ EXAMPLES:
         help=(
             "List of three target patch counts for beta_dust, temp_dust, and beta_pl. "
             "Example: --patch-count 10000 500 500"
+        ),
+    )
+    parser.add_argument(
+        "-c",
+        "--clusters",
+        type=str,
+        nargs=3,
+        default=None,
+        help=(
+            "Cluster source for [beta_dust, temp_dust, beta_pl]. "
+            "Each value is 'true' (use precomputed pixel subsets from true params), "
+            "an integer (K-means with N clusters), "
+            "or a path to a .npy file (full-sky patches from 'r_analysis bin'). "
+            "Example: -c true 10 5, or -c bd.npy td.npy bs.npy. "
+            "Precomputed 'true' subsets only available for tag c1d1s1. "
+            "Overrides -pc when provided."
         ),
     )
     parser.add_argument(
@@ -291,10 +362,35 @@ def main():
     # Step 1: Parse arguments and setup output directory
     args = parse_args()
 
+    # Parse cluster specs (-c flag)
+    cluster_specs = None
+    if args.clusters is not None:
+        cluster_specs = parse_cluster_specs(args.clusters)
+        if any(v == "true" for v in cluster_specs.values()) and args.tag != "c1d1s1":
+            raise ValueError(
+                f"Precomputed pixel subsets are only available for tag 'c1d1s1', got '{args.tag}'"
+            )
+
     if args.name is not None:
         out_folder = f"{args.output}/{args.name}"
     else:
-        patches = f"BD{args.patch_count[0]}_TD{args.patch_count[1]}_BS{args.patch_count[2]}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
+        if cluster_specs is not None:
+
+            def _spec_label(v):
+                if v == "true":
+                    return "true"
+                if isinstance(v, str) and v.endswith(".npy"):
+                    return "file"
+                return str(v)
+
+            bd_label = _spec_label(cluster_specs["beta_dust"])
+            td_label = _spec_label(cluster_specs["temp_dust"])
+            bs_label = _spec_label(cluster_specs["beta_pl"])
+        else:
+            bd_label = str(args.patch_count[0])
+            td_label = str(args.patch_count[1])
+            bs_label = str(args.patch_count[2])
+        patches = f"BD{bd_label}_TD{td_label}_BS{bs_label}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
         config = (
             f"{args.solver}_cond{args.cond}_ls{args.linesearch}_noise{int(args.noise_ratio * 100)}"
         )
@@ -315,9 +411,35 @@ def main():
     (indices,) = jnp.where(mask == 1)  # Get indices of unmasked pixels
 
     # Step 4: Determine maximum cluster counts (limited by available pixels)
-    B_dust_patches = min(args.patch_count[0], indices.size)  # Dust spectral index clusters
-    T_dust_patches = min(args.patch_count[1], indices.size)  # Dust temperature clusters
-    B_synchrotron_patches = min(args.patch_count[2], indices.size)  # Synchrotron index clusters
+    # Load precomputed clusters if requested, otherwise use patch counts
+    precomputed_clusters = {}  # param_name -> (cluster_array, n_clusters)
+    if cluster_specs is not None:
+        for param_name, spec in cluster_specs.items():
+            if spec == "true":
+                precomputed_clusters[param_name] = load_precomputed_clusters(param_name, indices)
+            elif isinstance(spec, str) and spec.endswith(".npy"):
+                precomputed_clusters[param_name] = load_patches_from_file(spec, indices)
+
+    if cluster_specs is not None:
+        B_dust_patches = (
+            precomputed_clusters["beta_dust"][1]
+            if "beta_dust" in precomputed_clusters
+            else min(cluster_specs["beta_dust"], indices.size)
+        )
+        T_dust_patches = (
+            precomputed_clusters["temp_dust"][1]
+            if "temp_dust" in precomputed_clusters
+            else min(cluster_specs["temp_dust"], indices.size)
+        )
+        B_synchrotron_patches = (
+            precomputed_clusters["beta_pl"][1]
+            if "beta_pl" in precomputed_clusters
+            else min(cluster_specs["beta_pl"], indices.size)
+        )
+    else:
+        B_dust_patches = min(args.patch_count[0], indices.size)
+        T_dust_patches = min(args.patch_count[1], indices.size)
+        B_synchrotron_patches = min(args.patch_count[2], indices.size)
 
     base_params = {
         "beta_dust": args.starting_params[0],
@@ -386,7 +508,33 @@ def main():
             "beta_pl_patches": B_s_patches,
         }
 
-        guess_clusters = kmeans_clusters(jax.random.key(0), mask, indices, n_regions, max_patches)
+        # Build clusters: use precomputed where available, K-means for the rest
+        _param_to_patch_key = {
+            "beta_dust": "beta_dust_patches",
+            "temp_dust": "temp_dust_patches",
+            "beta_pl": "beta_pl_patches",
+        }
+        if precomputed_clusters:
+            # Start with K-means for non-precomputed params
+            kmeans_regions = {
+                k: v
+                for k, v in n_regions.items()
+                if k not in {_param_to_patch_key[p] for p in precomputed_clusters}
+            }
+            if kmeans_regions:
+                kmeans_max = {k: max_patches[k] for k in kmeans_regions}
+                guess_clusters = kmeans_clusters(
+                    jax.random.key(0), mask, indices, kmeans_regions, kmeans_max
+                )
+            else:
+                guess_clusters = {}
+            # Insert precomputed clusters
+            for param_name, (cluster_arr, _) in precomputed_clusters.items():
+                guess_clusters[_param_to_patch_key[param_name]] = cluster_arr
+        else:
+            guess_clusters = kmeans_clusters(
+                jax.random.key(0), mask, indices, n_regions, max_patches
+            )
 
         guess_params = jax.tree.map(lambda v, c: jnp.full((c,), v), base_params, max_count)
         lower_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), lower_bound, max_count)

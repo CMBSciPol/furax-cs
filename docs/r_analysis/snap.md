@@ -89,23 +89,9 @@ r_analysis snap -r "kmeans_BD4000" "ptep_BD64" \
 by default, the display name is the matched pattern (e.g., `BD4000_TD500_BS500`).
 For combined runs, it is recommended to give an explicit name so it easier to match when plotting using [plot](plot.md)
 
-## Post-Clustering Binning
-
-Re-bin spectral parameters after clustering to reduce the number of patches:
-
-```bash
-r_analysis snap -r "kmeans_BD10000" -ird results/ \
-    --bin-bd 500 --bin-td 100 --bin-bs 200 \
-    -o out.parquet
-```
-
-| Flag | Description |
-|---|---|
-| `--bin-bd` | Number of bins for $\beta_\mathrm{dust}$ |
-| `--bin-td` | Number of bins for $T_\mathrm{dust}$ |
-| `--bin-bs` | Number of bins for $\beta_\mathrm{synch}$ |
-
-This will recache the systematics using the binned parameter maps and re-compute all statistics.
+::::{seealso}
+For reducing the number of clusters via post-clustering parameter binning, see [`bin`](bin.md).
+::::
 
 ## All Arguments
 
@@ -118,9 +104,6 @@ This will recache the systematics using the binned parameter maps and re-compute
 | `--combine` | flag | `False` | Merge all matched dirs into one entry |
 | `--name` | `str` (list) | auto | Display names for run groups |
 | `--max-size` | `int` | unlimited | Max entries per parquet file (splits into numbered files) |
-| `--bin-bd` | `int` | none | Bins for $\beta_\mathrm{dust}$ post-clustering |
-| `--bin-td` | `int` | none | Bins for $T_\mathrm{dust}$ post-clustering |
-| `--bin-bs` | `int` | none | Bins for $\beta_\mathrm{synch}$ post-clustering |
 
 Plus all [common arguments](index.md#common-arguments) (`-n`, `-r`, `-ird`, etc.).
 

@@ -1,6 +1,7 @@
 import argparse
 
 import jax.numpy as jnp
+
 from furax_cs import get_mask
 from furax_cs.multires_clusters import multires_clusters
 
