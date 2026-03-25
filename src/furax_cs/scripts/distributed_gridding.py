@@ -70,6 +70,13 @@ from furax.obs import (
 from furax.obs.landscapes import FrequencyLandscape
 from furax.obs.operators import NoiseDiagonalOperator
 from furax.obs.stokes import Stokes
+from jax_grid_search import DistributedGridSearch
+from jax_healpy.clustering import (
+    find_kmeans_clusters,
+    get_cutout_from_mask,
+    normalize_by_first_occurrence,
+)
+
 from furax_cs import (
     MASK_CHOICES,
     dump_default_search_space,
@@ -83,12 +90,6 @@ from furax_cs import (
     sanitize_mask_name,
 )
 from furax_cs.logging_utils import info, success
-from jax_grid_search import DistributedGridSearch
-from jax_healpy.clustering import (
-    find_kmeans_clusters,
-    get_cutout_from_mask,
-    normalize_by_first_occurrence,
-)
 
 jax.config.update("jax_enable_x64", True)
 
