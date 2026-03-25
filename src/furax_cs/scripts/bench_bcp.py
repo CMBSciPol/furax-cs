@@ -59,7 +59,6 @@ except ImportError:
 from furax import HomothetyOperator
 from furax.obs import negative_log_likelihood
 from furax.obs.landscapes import Stokes
-
 from furax_cs import load_from_cache, minimize, save_to_cache
 from furax_cs.logging_utils import info
 

@@ -8,9 +8,8 @@ import numpy as np
 from furax import HomothetyOperator
 from furax.obs import negative_log_likelihood, sky_signal
 from furax.obs.stokes import Stokes
-from jaxtyping import Array, Float, Int
-
 from furax_cs.optim import minimize
+from jaxtyping import Array, Float, Int
 
 
 def compute_w(

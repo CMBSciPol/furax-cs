@@ -1,7 +1,6 @@
 """Tests for the binning helper bin_parameter_map."""
 
 import numpy as np
-
 from furax_cs import bin_parameter_map
 
 
