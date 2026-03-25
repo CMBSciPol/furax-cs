@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, TypeAlias, Union
+from typing import Any, Literal, TypeAlias, Union
 
 import jax
 import jax.numpy as jnp
@@ -35,7 +35,7 @@ class ActiveSetMinimiser(optx.OptaxMinimiser):
 
 
 def lbfgs_zoom(
-    learning_rate: Optional[optax.ScalarOrSchedule] = None,
+    learning_rate: optax.ScalarOrSchedule | None = None,
     memory_size: int = 10,
     scale_init_precond: bool = False,
     max_linesearch_steps: int = 200,
@@ -43,8 +43,8 @@ def lbfgs_zoom(
     slope_rtol: float = 1e-4,
     curv_rtol: float = 0.9,
     verbose: bool = False,
-    lower: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower: PyTree[Float[Array, " P"]] | None = None,
+    upper: PyTree[Float[Array, " P"]] | None = None,
 ) -> optax.GradientTransformation:
     """L-BFGS with zoom linesearch (strong Wolfe conditions).
 
@@ -98,7 +98,7 @@ def lbfgs_zoom(
 
 
 def lbfgs_backtrack(
-    learning_rate: Optional[optax.ScalarOrSchedule] = None,
+    learning_rate: optax.ScalarOrSchedule | None = None,
     memory_size: int = 10,
     scale_init_precond: bool = False,
     max_backtracking_steps: int = 200,
@@ -107,8 +107,8 @@ def lbfgs_backtrack(
     increase_factor: float = 1.5,
     max_learning_rate: float = 1.0,
     verbose: bool = False,
-    lower: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower: PyTree[Float[Array, " P"]] | None = None,
+    upper: PyTree[Float[Array, " P"]] | None = None,
 ) -> optax.GradientTransformation:
     """L-BFGS with backtracking linesearch (Armijo condition only).
 
@@ -169,8 +169,8 @@ def backtracking_adam(
     increase_factor: float = 1.5,
     max_learning_rate: float = 1.0,
     verbose: bool = False,
-    lower: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower: PyTree[Float[Array, " P"]] | None = None,
+    upper: PyTree[Float[Array, " P"]] | None = None,
 ) -> optax.GradientTransformation:
     """Adam with backtracking linesearch (Armijo condition only)."""
     linesearch = _linesearch.scale_by_backtracking_linesearch(
@@ -200,8 +200,8 @@ def backtracking_adam(
 
 
 def apply_projection(
-    lower: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower: PyTree[Float[Array, " P"]] | None = None,
+    upper: PyTree[Float[Array, " P"]] | None = None,
 ) -> optax.GradientTransformation:
     """Wrap box projection into a GradientTransformation.
 
@@ -229,7 +229,7 @@ def apply_projection(
     def update_fn(
         updates: PyTree[Float[Array, " P"]],
         state: optax.EmptyState,
-        params: Optional[PyTree[Float[Array, " P"]]] = None,
+        params: PyTree[Float[Array, " P"]] | None = None,
     ) -> tuple[PyTree[Float[Array, " P"]], optax.EmptyState]:
         if params is None:
             raise ValueError("NO_PARAMS_MSG")
@@ -297,8 +297,8 @@ def get_solver(
     atol: float = 1e-8,
     learning_rate: float = 1e-3,
     max_linesearch_steps: int = 200,
-    lower: Optional[PyTree[Float[Array, " P"]]] = None,
-    upper: Optional[PyTree[Float[Array, " P"]]] = None,
+    lower: PyTree[Float[Array, " P"]] | None = None,
+    upper: PyTree[Float[Array, " P"]] | None = None,
     **kwargs: Any,
 ) -> tuple[Solver, Literal["optimistix", "scipy"]]:
     """

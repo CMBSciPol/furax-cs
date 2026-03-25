@@ -5,7 +5,6 @@ where pixels sharing the same low-resolution parent pixel are grouped
 together. This is the approach used in the LiteBIRD PTEP methodology.
 """
 
-from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -50,7 +49,7 @@ def multires_clusters(
     mask: Float[Array, " npix"],
     indices: Int[Array, " n_valid"],
     target_ud_grade: dict[str, int],
-    nside: Optional[int] = None,
+    nside: int | None = None,
 ) -> dict[str, Int[Array, " n_valid"]]:
     """Generate multi-resolution cluster assignments using HEALPix ud_grade.
 

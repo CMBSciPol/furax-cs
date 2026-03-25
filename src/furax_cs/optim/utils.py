@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, Optional
+from typing import Any
 
 import jax
 from jaxtyping import Array, Float, PyTree
@@ -24,10 +24,10 @@ ConditionedFn = Callable[..., Float[Array, ""]]
 
 def condition(
     fn: Callable[..., Float[Array, ""]],
-    lower: Optional[Params] = None,
-    upper: Optional[Params] = None,
+    lower: Params | None = None,
+    upper: Params | None = None,
     scale_function: bool = False,
-    init_params: Optional[Params] = None,
+    init_params: Params | None = None,
     *args: Any,
     **kwargs: Any,
 ) -> tuple[ConditionedFn, Transformation, Transformation]:
