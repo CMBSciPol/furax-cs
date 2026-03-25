@@ -315,7 +315,7 @@ def plot_all_r_estimation(
                 )
 
         plt.xlabel(r"$r$")
-        plt.ylabel("Likelihood")
+        plt.ylabel(r"$L_{\text{cosmo}}$")
         if xlim:
             plt.xlim(*xlim)
         else:
