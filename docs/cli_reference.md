@@ -191,12 +191,12 @@ Available mask names:
 | `ALL` | Full sky |
 | `GALACTIC` | Galactic plane only |
 | `GAL020` | 20% Galactic cut (upper + lower) |
-| `GAL020_U` | 20% upper Galactic cut |
-| `GAL020_L` | 20% lower Galactic cut |
-| `GAL040` | 40% Galactic cut |
-| `GAL040_U` / `GAL040_L` | 40% upper/lower |
-| `GAL060` | 60% Galactic cut |
-| `GAL060_U` / `GAL060_L` | 60% upper/lower |
+| `GAL020_U` | 10% upper Galactic cut |
+| `GAL020_L` | 10% lower Galactic cut |
+| `GAL040` | 20% Galactic cut |
+| `GAL040_U` / `GAL040_L` | 10% upper/lower |
+| `GAL060` | 20% Galactic cut |
+| `GAL060_U` / `GAL060_L` | 10% upper/lower |
 
 Masks can be combined with `+` (union) and `-` (subtract):
 
