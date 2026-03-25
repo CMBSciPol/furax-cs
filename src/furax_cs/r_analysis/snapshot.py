@@ -110,6 +110,9 @@ class CompSepResult:
     r: REstimate
     residual: ResidualData
     params: ParamData
+    # Foreground-only frequency maps for rebinning (optional, stored by snap)
+    fg_nocmb_q: np.ndarray | None = None  # (n_freq, npix)
+    fg_nocmb_u: np.ndarray | None = None  # (n_freq, npix)
     version: int = 1
     # PIL images rendered at snap time (all optional)
     img_cmb_true_q: PILImage.Image | None = None
@@ -266,6 +269,9 @@ def _build_features(npix: int, n_real: int) -> datasets.Features:
             "all_params_beta_dust": Sequence(Sequence(Value("float64"))),
             "all_params_temp_dust": Sequence(Sequence(Value("float64"))),
             "all_params_beta_pl": Sequence(Sequence(Value("float64"))),
+            # Foreground-only frequency maps (n_freq, npix) — nullable, for rebinning
+            "fg_nocmb_q": Sequence(Sequence(Value("float64"))),
+            "fg_nocmb_u": Sequence(Sequence(Value("float64"))),
             # PIL images
             "img_cmb_true_q": Image(),
             "img_cmb_true_u": Image(),
@@ -351,6 +357,9 @@ def _result_to_row(result: CompSepResult) -> dict:
             if result.params.all_params_beta_pl is not None
             else None
         ],
+        # Foreground-only frequency maps
+        "fg_nocmb_q": [result.fg_nocmb_q.tolist() if result.fg_nocmb_q is not None else None],
+        "fg_nocmb_u": [result.fg_nocmb_u.tolist() if result.fg_nocmb_u is not None else None],
         # Images — datasets.Image() accepts PIL Images directly
         "img_cmb_true_q": [result.img_cmb_true_q],
         "img_cmb_true_u": [result.img_cmb_true_u],
@@ -447,12 +456,14 @@ def _row_to_result(row: dict) -> CompSepResult:
         sky_tag=str(row["sky_tag"]),
         noise_selection=str(row["noise_selection"]),
         fsky=fsky,
-        version=int(row["version"]),
         cmb=cmb,
         cl=cl,
         r=r,
         residual=residual,
         params=params,
+        fg_nocmb_q=_arr("fg_nocmb_q"),
+        fg_nocmb_u=_arr("fg_nocmb_u"),
+        version=int(row.get("version", 1)),
         img_cmb_true_q=_img("img_cmb_true_q"),
         img_cmb_true_u=_img("img_cmb_true_u"),
         img_cmb_recon_q=_img("img_cmb_recon_q"),
@@ -563,6 +574,12 @@ def _build_result_from_pytrees(
     stat_arr = np.asarray(stat_maps_raw)[:max_ns] if stat_maps_raw is not None else None
     residual = ResidualData(syst_map=syst_arr, stat_maps=stat_arr)
 
+    # Foreground data for rebinning
+    fg_nocmb_q_raw = plotting_data.get("fg_nocmb_q")
+    fg_nocmb_u_raw = plotting_data.get("fg_nocmb_u")
+    fg_nocmb_q = np.asarray(fg_nocmb_q_raw) if fg_nocmb_q_raw is not None else None
+    fg_nocmb_u = np.asarray(fg_nocmb_u_raw) if fg_nocmb_u_raw is not None else None
+
     # Params
     params_map = plotting_data.get("params_map")
     true_params = plotting_data.get("true_params")
@@ -633,6 +650,8 @@ def _build_result_from_pytrees(
         r=r,
         residual=residual,
         params=params,
+        fg_nocmb_q=np.asarray(fg_nocmb_q) if fg_nocmb_q is not None else None,
+        fg_nocmb_u=np.asarray(fg_nocmb_u) if fg_nocmb_u is not None else None,
         img_cmb_true_q=_maybe_render(cmb_q, title=f"{kw} CMB Q true"),
         img_cmb_true_u=_maybe_render(cmb_u, title=f"{kw} CMB U true"),
         img_cmb_recon_q=_maybe_render(recon_q_best, title=f"{kw} CMB Q recon"),
@@ -721,7 +740,6 @@ def run_snapshot(
     combine_kw: str | None = None,
     names: list[str] | None = None,
     max_size: int | None = None,
-    bin_config: dict[str, int] | None = None,
 ) -> int:
     """Entry point for 'snap' subcommand.
 
@@ -803,7 +821,6 @@ def run_snapshot(
             solver_name,
             noise_selection=noise_selection,
             sky_tag=sky_tag,
-            bin_config=bin_config,
         )
         info(f"compute_all done in {time.perf_counter() - t0:.2f}s for {len(chunk)} groups")
 

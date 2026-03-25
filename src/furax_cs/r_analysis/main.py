@@ -3,6 +3,7 @@ import re
 import datasets
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
+
 from furax_cs.data.instruments import get_instrument
 
 from ..logging_utils import (
@@ -48,6 +49,42 @@ def run_analysis() -> int | None:
             output_format=args.output_format,
         )
 
+    # Handle bin subcommand (uses common_parser, needs run_grep)
+    if args.subcommand == "bin":
+        from .binning import run_bin
+
+        bin_config: dict[str, int] = {}
+        if args.bin_bd is not None:
+            bin_config["beta_dust"] = args.bin_bd
+        if args.bin_td is not None:
+            bin_config["temp_dust"] = args.bin_td
+        if args.bin_bs is not None:
+            bin_config["beta_pl"] = args.bin_bs
+        if not bin_config:
+            error("At least one --bin-* argument is required for bin.")
+            return 1
+
+        matched_results = run_grep(
+            result_folders=args.input_results_dir,
+            run_specs=args.runs,
+        )
+        if len(matched_results) == 0:
+            error("No results matched the provided run specifications. Exiting.")
+            return 1
+
+        # Collect all folders from all matched groups
+        all_folders: list[str] = []
+        for _kw, (folders, _indices, _root) in matched_results.items():
+            all_folders.extend(folders)
+
+        return run_bin(
+            folders=all_folders,
+            nside=args.nside,
+            output_dir=args.output_dir,
+            bin_config=bin_config,
+            noise_selection=args.noise_selection,
+        )
+
     # run_grep only needed for snap/validate subcommands
     matched_results = None
     nside = None
@@ -77,13 +114,6 @@ def run_analysis() -> int | None:
         if args.combine:
             combine_kw = args.name[0] if args.name else "COMBINED"
             names = None  # name is used as combine_kw, not per-entry
-        bin_config: dict[str, int] = {}
-        if args.bin_bd is not None:
-            bin_config["beta_dust"] = args.bin_bd
-        if args.bin_td is not None:
-            bin_config["temp_dust"] = args.bin_td
-        if args.bin_bs is not None:
-            bin_config["beta_pl"] = args.bin_bs
 
         return run_snapshot(
             matched_results,
@@ -100,7 +130,6 @@ def run_analysis() -> int | None:
             combine_kw=combine_kw,
             names=names,
             max_size=args.max_size,
-            bin_config=bin_config or None,
         )
 
     if args.subcommand == "plot":
@@ -117,11 +146,16 @@ def run_analysis() -> int | None:
 
         data_files = [str(p) for p in all_parquets]
 
-        ds = datasets.load_dataset(
-            "parquet",
-            data_files=data_files,
-            split="train",
-        ).with_format("numpy")
+        # Use pyarrow unified schema to handle parquets with different columns
+        # (e.g. older parquets missing fg_nocmb_q/u added for binning support)
+        import pyarrow as pa
+        import pyarrow.dataset as pads
+        import pyarrow.parquet as pq
+
+        pa_schemas = [pq.read_schema(f) for f in data_files]
+        unified_schema = pa.unify_schemas(pa_schemas)
+        pa_table = pads.dataset(data_files, format="parquet", schema=unified_schema).to_table()
+        ds = datasets.Dataset(pa_table).with_format("numpy")
 
         if args.runs:
             patterns = args.runs
