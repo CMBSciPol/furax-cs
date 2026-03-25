@@ -72,8 +72,6 @@ from furax.obs import (
     sky_signal,
 )
 from furax.obs.stokes import Stokes
-from jax_healpy.clustering import get_cutout_from_mask, normalize_by_first_occurrence
-
 from furax_cs import (
     MASK_CHOICES,
     generate_noise_operator,
@@ -87,6 +85,7 @@ from furax_cs import (
     sanitize_mask_name,
 )
 from furax_cs.logging_utils import info, success
+from jax_healpy.clustering import get_cutout_from_mask, normalize_by_first_occurrence
 
 jax.config.update("jax_enable_x64", True)
 

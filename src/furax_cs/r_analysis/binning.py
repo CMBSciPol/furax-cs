@@ -28,7 +28,6 @@ _BIN_PARAM_KEYS: dict[str, tuple[str, str]] = {
 _ALL_PARAM_NAMES = ["beta_dust", "temp_dust", "beta_pl"]
 
 
-
 def _squeeze_patches(arr: np.ndarray) -> np.ndarray:
     """Squeeze n_gridpts=1 leading dim from patch arrays if present."""
     if arr.ndim > 1:
