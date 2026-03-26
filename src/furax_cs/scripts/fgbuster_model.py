@@ -209,7 +209,7 @@ def run_fgbuster_comp_sep(
     components: list[Any],
     instrument: Any,
     max_iter: int = 1000,
-    tol: float = 1e-15,
+    tol: float = 1e-18,
 ) -> Any:
     """
     Run FGBuster adaptive component separation.
@@ -416,7 +416,7 @@ def main():
             components,
             instrument,
             max_iter=args.max_iter,
-            tol=1e-16,
+            tol=1e-18,
         )
         end_time = perf_counter()
         info(f"Run {sim_idx} component separation took {end_time - start_time:.2f} seconds")

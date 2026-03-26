@@ -35,7 +35,7 @@ SINGLE_FILE_AGGREGATE_PLOTS = {
     "plot_nll_vs_c",
 }
 
-font_size = 22
+font_size = 24
 plt.rcParams.update(
     {
         "font.size": font_size,
@@ -121,7 +121,11 @@ def set_font_size(size: int) -> None:
 
 
 def save_or_show(
-    filename: str, output_format: str, output_dir: str = "plots", subfolder: str | None = None
+    filename: str,
+    output_format: str,
+    output_dir: str = "plots",
+    subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Save figure to file or show inline based on output format."""
     from ...logging_utils import success
@@ -140,7 +144,7 @@ def save_or_show(
         os.makedirs(base_dir, exist_ok=True)
 
         filepath = os.path.join(base_dir, f"{filename}.{ext}")
-        plt.savefig(filepath, dpi=dpi, bbox_inches="tight", transparent=True)
+        plt.savefig(filepath, dpi=dpi, bbox_inches="tight", transparent=transparent)
         plt.close()
         success(f"Saved: {filepath}")
 
@@ -206,6 +210,7 @@ def plot_indiv_results(
     xlim: tuple[float, float] | None = None,
     r_legend_anchor: tuple[float, float] | None = None,
     r_figsize: tuple[float, float] | None = None,
+    transparent: bool = True,
 ) -> None:
     """Generate per-run plots according to CLI flags."""
     from .individual import (
@@ -265,10 +270,16 @@ def plot_indiv_results(
 
     if indiv_flags.get("plot_params"):
         assert params_map is not None, "No params_map found for plotting."
-        plot_params(name, params_map, output_format, output_dir=output_dir, subfolder=subfolder)
+        plot_params(
+            name, params_map, output_format, output_dir=output_dir, subfolder=subfolder,
+            transparent=transparent,
+        )
     if indiv_flags.get("plot_patches"):
         assert patches_map is not None, "No patches_map found for plotting."
-        plot_patches(name, patches_map, output_format, output_dir=output_dir, subfolder=subfolder)
+        plot_patches(
+            name, patches_map, output_format, output_dir=output_dir, subfolder=subfolder,
+            transparent=transparent,
+        )
 
     if indiv_flags.get("plot_cmb_recon"):
         assert cmb_stokes is not None, "No cmb_stokes found for plotting."
@@ -279,18 +290,21 @@ def plot_indiv_results(
             output_format,
             output_dir=output_dir,
             subfolder=subfolder,
+            transparent=transparent,
         )
 
     if indiv_flags.get("plot_systematic_maps"):
         assert syst_map is not None, "No systematic residual map found for plotting."
         plot_systematic_residual_maps(
-            name, syst_map, output_format, output_dir=output_dir, subfolder=subfolder
+            name, syst_map, output_format, output_dir=output_dir, subfolder=subfolder,
+            transparent=transparent,
         )
 
     if indiv_flags.get("plot_statistical_maps"):
         assert stat_maps is not None, "No statistical residual maps found for plotting."
         plot_statistical_residual_maps(
-            name, stat_maps, output_format, output_dir=output_dir, subfolder=subfolder
+            name, stat_maps, output_format, output_dir=output_dir, subfolder=subfolder,
+            transparent=transparent,
         )
 
     if indiv_flags.get("plot_cl_spectra"):
@@ -320,6 +334,7 @@ def plot_indiv_results(
             output_format,
             output_dir=output_dir,
             subfolder=subfolder,
+            transparent=transparent,
         )
 
     if indiv_flags.get("plot_r_estimation"):
@@ -346,6 +361,7 @@ def plot_indiv_results(
             xlim=xlim,
             legend_anchor=r_legend_anchor,
             figsize=r_figsize,
+            transparent=transparent,
         )
 
     if indiv_flags.get("plot_params_residuals"):
@@ -357,6 +373,7 @@ def plot_indiv_results(
                 output_format,
                 output_dir=output_dir,
                 subfolder=subfolder,
+                transparent=transparent,
             )
 
 
@@ -378,6 +395,7 @@ def plot_aggregate_results(
     s_figsize: tuple[float, float] | None = None,
     r_range: tuple[float, float] | None = None,
     r_plot: tuple[float, float] | None = None,
+    transparent: bool = True,
 ) -> None:
     from .group import plot_all_cl_residuals, plot_all_histograms, plot_all_r_estimation
     from .single import plot_variance_vs_r
@@ -414,7 +432,8 @@ def plot_aggregate_results(
 
     if aggregate_flags.get("plot_r_vs_v"):
         plot_variance_vs_r(
-            stacked_titles, stacked_cmb, stacked_r, output_format, output_dir=output_dir
+            stacked_titles, stacked_cmb, stacked_r, output_format, output_dir=output_dir,
+            transparent=transparent,
         )
         plt.close("all")
 
@@ -428,6 +447,7 @@ def plot_aggregate_results(
                 output_dir=output_dir,
                 group_name=group_name,
                 colors=colors,
+                transparent=transparent,
             )
             plt.close("all")
 
@@ -443,6 +463,7 @@ def plot_aggregate_results(
             figsize=s_figsize,
             r_range=r_range,
             r_plot=r_plot,
+            transparent=transparent,
         )
         plt.close("all")
 
@@ -458,6 +479,7 @@ def plot_aggregate_results(
             legend_anchor=r_legend_anchor,
             figsize=r_figsize,
             r_plot=r_plot,
+            transparent=transparent,
         )
         plt.close("all")
 
@@ -482,6 +504,7 @@ def run_grouped_plot(
     s_figsize: tuple[float, float] | None = None,
     r_range: tuple[float, float] | None = None,
     r_plot: tuple[float, float] | None = None,
+    transparent: bool = True,
 ) -> int:
     """Run plots with one group per `-g` pattern."""
     from .single import plot_single_file_grouped
@@ -537,6 +560,7 @@ def run_grouped_plot(
                 xlim=xlim,
                 r_legend_anchor=r_legend_anchor,
                 r_figsize=r_figsize,
+                transparent=transparent,
             )
             plt.close("all")
             names.append(row_label)
@@ -562,11 +586,13 @@ def run_grouped_plot(
             s_figsize=s_figsize,
             r_range=r_range,
             r_plot=r_plot,
+            transparent=transparent,
         )
         all_groups_collected.append((group_label, names, kw_to_plot))
 
     plot_single_file_grouped(
-        all_groups_collected, single_flags, output_format, output_dir, colors=colors
+        all_groups_collected, single_flags, output_format, output_dir, colors=colors,
+        transparent=transparent,
     )
     return 0
 

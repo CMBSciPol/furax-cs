@@ -204,6 +204,7 @@ def run_analysis() -> int | None:
             s_figsize=args.s_figsize,
             r_range=args.r_range,
             r_plot=args.r_plot,
+            transparent=args.transparent,
         )
 
     if args.subcommand == "validate":

@@ -123,6 +123,7 @@ def load_patches_from_file(path: str, indices: Array) -> tuple[Array, int]:
     masked = full_sky[indices].astype(jnp.int64)
     n_clusters = int(jnp.unique(masked).size)
     normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
+    normalized = masked.astype(jnp.int64)
     return normalized, n_clusters
 
 
@@ -299,12 +300,11 @@ EXAMPLES:
         help="Output directory for results",
     )
     parser.add_argument(
-        "-v",
-        "--use-vmap",
-        action="store_true",
-        help="Use jax.vmap instead of for-loop for noise simulations. "
-        "Only activate this option when using JAX JIT cache (persistent compilation cache) "
-        "to avoid recompilation overhead on each run.",
+        "--vmap-batch",
+        type=int,
+        default=10,
+        help="Number of noise simulations per vmap batch. "
+        "Use 1 to disable vmap and run a serial for-loop of JIT'd single runs.",
     )
     parser.add_argument(
         "-top_k",
@@ -499,7 +499,7 @@ def main():
         B_s_patches: int,
         planck_mask: Array,
         indices: Array,
-        use_vmap: bool = False,
+        vmap_batch: int = 10,
     ) -> dict[str, Any]:
         n_regions = {
             "temp_dust_patches": T_d_patches,
@@ -585,19 +585,25 @@ def main():
                 "small_n": small_n_np,
             }
 
-        if use_vmap:
-            # Vmap approach - vectorize over noise simulations
-            results = jax.vmap(single_run)(
-                jnp.arange(args.seed_start, args.seed_start + nb_noise_sim)
-            )
-        else:
-            # For-loop approach - JIT single_run only
+        if vmap_batch == 1:
+            # Serial for-loop: JIT a single run at a time
             single_run_jit = jax.jit(single_run)
-            results_list = tqdm(
-                [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
-                desc="Running noise simulations",
+            results_list = list(
+                tqdm(
+                    [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
+                    desc="Running noise simulations",
+                )
             )
             results = jax.tree.map(lambda *xs: jnp.stack(xs), *results_list)
+        else:
+            # Batched vmap: for-loop of JIT'd vmaps, each processing vmap_batch sims
+            vmapped_run_jit = jax.jit(jax.vmap(single_run))
+            seeds = list(range(args.seed_start, args.seed_start + nb_noise_sim))
+            batches = []
+            for i in tqdm(range(0, nb_noise_sim, vmap_batch), desc="Running noise simulations"):
+                batch_seeds = jnp.array(seeds[i : i + vmap_batch])
+                batches.append(vmapped_run_jit(batch_seeds))
+            results = jax.tree.map(lambda *xs: jnp.concatenate(xs, axis=0), *batches)
         results["beta_dust_patches"] = guess_clusters["beta_dust_patches"]
         results["temp_dust_patches"] = guess_clusters["temp_dust_patches"]
         results["beta_pl_patches"] = guess_clusters["beta_pl_patches"]
@@ -612,12 +618,8 @@ def main():
                 B_s_patches,
                 mask,
                 indices,
-                use_vmap=args.use_vmap,
+                vmap_batch=args.vmap_batch,
             )
-
-        # When using vmap, JIT the entire objective function for better caching
-        if args.use_vmap:
-            objective_function = jax.jit(objective_function)
 
         if not args.best_only:
             start_time = perf_counter()

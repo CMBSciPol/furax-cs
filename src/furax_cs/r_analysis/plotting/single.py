@@ -151,6 +151,7 @@ def _create_variance_vs_r_plot(
     output_format: str,
     output_dir: str = "plots",
     overlap_threshold: float = 0.02,
+    transparent: bool = True,
 ) -> None:
     """Helper to plot variance vs best-fit r for a given parameter/totals."""
     points = []
@@ -335,7 +336,7 @@ def _create_variance_vs_r_plot(
     plt.tight_layout()
 
     filename_suffix = "total" if is_total else patch_key.replace("_patches", "")
-    save_or_show(f"variance_vs_residual_r_{filename_suffix}", output_format, output_dir=output_dir)
+    save_or_show(f"variance_vs_residual_r_{filename_suffix}", output_format, output_dir=output_dir, transparent=transparent)
     plt.close()
 
 
@@ -345,6 +346,7 @@ def plot_variance_vs_r(
     r_pytree_list: list[dict[str, Array]],
     output_format: str,
     output_dir: str = "plots",
+    transparent: bool = True,
 ) -> None:
     """Plot variance vs best-fit r for each spectral parameter and combined."""
     patch_configs = [
@@ -373,6 +375,7 @@ def plot_variance_vs_r(
                 r_pytree_list,
                 output_format,
                 output_dir=output_dir,
+                transparent=transparent,
             )
 
 
@@ -382,6 +385,7 @@ def plot_single_file_grouped(
     output_format: str,
     output_dir: str,
     colors: list[str] | None = None,
+    transparent: bool = True,
 ) -> None:
     """Line/scatter plots with one series per group for single-file aggregate plots."""
     patch_configs = [
@@ -484,6 +488,7 @@ def plot_single_file_grouped(
                     f"residual_r_vs_clusters_{suffix}_grouped",
                     output_format,
                     output_dir=output_dir,
+                    transparent=transparent,
                 )
                 plt.close()
 
@@ -508,7 +513,8 @@ def plot_single_file_grouped(
             fig.tight_layout()
             suffix = patch_key.replace("_patches", "")
             save_or_show(
-                f"variance_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir
+                f"variance_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir,
+                transparent=transparent,
             )
             plt.close()
 
@@ -532,5 +538,5 @@ def plot_single_file_grouped(
             ax.legend()
             fig.tight_layout()
             suffix = patch_key.replace("_patches", "")
-            save_or_show(f"nll_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir)
+            save_or_show(f"nll_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir, transparent=transparent)
             plt.close()

@@ -157,12 +157,11 @@ EXAMPLES:
         help="Output directory for results",
     )
     parser.add_argument(
-        "-v",
-        "--use-vmap",
-        action="store_true",
-        help="Use jax.vmap instead of for-loop for noise simulations. "
-        "Only activate this option when using JAX JIT cache (persistent compilation cache) "
-        "to avoid recompilation overhead on each run.",
+        "--vmap-batch",
+        type=int,
+        default=10,
+        help="Number of noise simulations per vmap batch. "
+        "Use 1 to disable vmap and run a serial for-loop of JIT'd single runs.",
     )
     parser.add_argument(
         "-top_k",
@@ -323,19 +322,25 @@ def main():
     # Save results and mask
     if not args.best_only:
         start_time = perf_counter()
-        if args.use_vmap:
-            # Vmap approach - JIT the entire vmapped computation
-            results = jax.jit(jax.vmap(single_run))(
-                jnp.arange(args.seed_start, args.seed_start + nb_noise_sim)
-            )
-        else:
-            # For-loop approach - JIT single_run only
+        if args.vmap_batch == 1:
+            # Serial for-loop: JIT a single run at a time
             single_run_jit = jax.jit(single_run)
-            results_list = tqdm(
-                [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
-                desc="Running noise simulations",
+            results_list = list(
+                tqdm(
+                    [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
+                    desc="Running noise simulations",
+                )
             )
             results = jax.tree.map(lambda *xs: jnp.stack(xs), *results_list)
+        else:
+            # Batched vmap: for-loop of JIT'd vmaps, each processing vmap_batch sims
+            vmapped_run_jit = jax.jit(jax.vmap(single_run))
+            seeds = list(range(args.seed_start, args.seed_start + nb_noise_sim))
+            batches = []
+            for i in tqdm(range(0, nb_noise_sim, args.vmap_batch), desc="Running noise simulations"):
+                batch_seeds = jnp.array(seeds[i : i + args.vmap_batch])
+                batches.append(vmapped_run_jit(batch_seeds))
+            results = jax.tree.map(lambda *xs: jnp.concatenate(xs, axis=0), *batches)
         jax.tree.map(lambda x: x.block_until_ready(), results)
         end_time = perf_counter()
         min_bd, max_bd = results["beta_dust"].min(), results["beta_dust"].max()

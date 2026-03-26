@@ -20,8 +20,9 @@ def plot_params(
     params: dict[str, Float[Array, " npix"]],
     output_format: str,
     output_dir: str = "plots",
-    plot_vertical: bool = False,
+    plot_vertical: bool = True,
     subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Plot recovered spectral parameter maps for a single configuration."""
     if plot_vertical:
@@ -47,7 +48,7 @@ def plot_params(
             format="%.4f",
         )
 
-    save_or_show(f"params_{name}", output_format, output_dir=output_dir, subfolder=subfolder)
+    save_or_show(f"params_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
     base_dir = os.path.join(output_dir, subfolder) if subfolder else output_dir
     os.makedirs(base_dir, exist_ok=True)
     params_dict = {
@@ -65,6 +66,7 @@ def plot_patches(
     output_dir: str = "plots",
     plot_vertical: bool = False,
     subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Visualise patch assignments (cluster labels) for each spectral parameter."""
     if plot_vertical:
@@ -109,7 +111,7 @@ def plot_patches(
             bgcolor=(0.0,) * 4,
             cbar=True,
         )
-    save_or_show(f"patches_{name}", output_format, output_dir=output_dir, subfolder=subfolder)
+    save_or_show(f"patches_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
 
 
 def plot_cmb_reconstructions(
@@ -119,6 +121,7 @@ def plot_cmb_reconstructions(
     output_format: str,
     output_dir: str = "plots",
     subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Plot reconstructed maps, inputs, and differences for Q/U."""
 
@@ -179,7 +182,7 @@ def plot_cmb_reconstructions(
         bgcolor=(0,) * 4,
     )
     plt.title("CMB Reconstruction")
-    save_or_show(f"cmb_recon_{name}", output_format, output_dir=output_dir, subfolder=subfolder)
+    save_or_show(f"cmb_recon_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
 
 
 def plot_systematic_residual_maps(
@@ -188,6 +191,7 @@ def plot_systematic_residual_maps(
     output_format: str,
     output_dir: str = "plots",
     subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Plot systematic residual Q/U maps for a single configuration."""
     syst_q = np.where(syst_map[1] == hp.UNSEEN, np.nan, syst_map[1])
@@ -226,6 +230,7 @@ def plot_systematic_residual_maps(
         output_format,
         output_dir=output_dir,
         subfolder=subfolder,
+        transparent=transparent,
     )
 
 
@@ -235,47 +240,54 @@ def plot_statistical_residual_maps(
     output_format: str,
     output_dir: str = "plots",
     subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Plot statistical residual Q/U maps for a single configuration."""
-    stat_map_first = stat_maps[0]
+    indx = [0 , 1 , 2]
+    for i in indx:
+        if i >= len(stat_maps):
+            info(f"Only {len(stat_maps)} statistical residual maps available. Skipping index {i}.")
+            continue
+        stat_map_first = stat_maps[i]
 
-    stat_q = np.where(stat_map_first[1] == hp.UNSEEN, np.nan, stat_map_first[1])
-    stat_u = np.where(stat_map_first[2] == hp.UNSEEN, np.nan, stat_map_first[2])
+        stat_q = np.where(stat_map_first[1] == hp.UNSEEN, np.nan, stat_map_first[1])
+        stat_u = np.where(stat_map_first[2] == hp.UNSEEN, np.nan, stat_map_first[2])
 
-    vmin, vmax = get_symmetric_percentile_limits([stat_q, stat_u])
+        vmin, vmax = get_symmetric_percentile_limits([stat_q, stat_u])
 
-    plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(12, 6))
 
-    hp.mollview(
-        stat_q,
-        title=r"Statistical Residual (Q) ($\mu$K)",
-        sub=(1, 2, 1),
-        min=vmin,
-        max=vmax,
-        cmap="RdBu_r",
-        bgcolor=(0,) * 4,
-        cbar=True,
-        notext=True,
-    )
+        hp.mollview(
+            stat_q,
+            title=r"Statistical Residual (Q) ($\mu$K)",
+            sub=(1, 2, 1),
+            min=vmin,
+            max=vmax,
+            cmap="RdBu_r",
+            bgcolor=(0,) * 4,
+            cbar=True,
+            notext=True,
+        )
 
-    hp.mollview(
-        stat_u,
-        title=r"Statistical Residual (U) ($\mu$K)",
-        sub=(1, 2, 2),
-        min=vmin,
-        max=vmax,
-        cmap="RdBu_r",
-        bgcolor=(0,) * 4,
-        cbar=True,
-        notext=True,
-    )
+        hp.mollview(
+            stat_u,
+            title=r"Statistical Residual (U) ($\mu$K)",
+            sub=(1, 2, 2),
+            min=vmin,
+            max=vmax,
+            cmap="RdBu_r",
+            bgcolor=(0,) * 4,
+            cbar=True,
+            notext=True,
+        )
 
-    save_or_show(
-        f"statistical_residual_maps_{name}",
-        output_format,
-        output_dir=output_dir,
-        subfolder=subfolder,
-    )
+        save_or_show(
+            f"statistical_residual_maps_{name}_realization_{i}",
+            output_format,
+            output_dir=output_dir,
+            subfolder=subfolder,
+            transparent=transparent,
+        )
 
 
 def plot_cl_residuals(
@@ -291,6 +303,7 @@ def plot_cl_residuals(
     output_format: str,
     output_dir: str = "plots",
     subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Plot detailed BB spectrum decomposition for a single configuration."""
     _ = plt.figure(figsize=(10, 8))
@@ -331,7 +344,7 @@ def plot_cl_residuals(
 
     plt.tight_layout()
 
-    save_or_show(f"bb_spectra_{name}", output_format, output_dir=output_dir, subfolder=subfolder)
+    save_or_show(f"bb_spectra_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
 
 
 def plot_r_estimator(
@@ -347,6 +360,7 @@ def plot_r_estimator(
     xlim: tuple[float, float] | None = None,
     legend_anchor: tuple[float, float] | None = None,
     figsize: tuple[float, float] | None = None,
+    transparent: bool = True,
 ) -> None:
     """Plot one-dimensional likelihood for r with highlighted estimate."""
     plt.figure(figsize=figsize if figsize else (6, 5))
@@ -387,7 +401,7 @@ def plot_r_estimator(
     plt.legend(**legend_kwargs)
     plt.tight_layout()
 
-    save_or_show(f"r_likelihood_{name}", output_format, output_dir=output_dir, subfolder=subfolder)
+    save_or_show(f"r_likelihood_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
 
     info(f"Estimated r (Reconstructed): {r_best:.4e} (+{sigma_r_pos:.1e}, -{sigma_r_neg:.1e})")
 
@@ -399,6 +413,7 @@ def plot_params_residuals(
     output_format: str,
     output_dir: str = "plots",
     subfolder: str | None = None,
+    transparent: bool = True,
 ) -> None:
     """Plot individual param maps + residuals vs truth for one run.
 
@@ -451,4 +466,5 @@ def plot_params_residuals(
         output_format,
         output_dir=output_dir,
         subfolder=subfolder,
+        transparent=transparent,
     )

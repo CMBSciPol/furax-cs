@@ -122,9 +122,13 @@ def compute_total_res(
     else:
         res = np.where(s_hat_arr == hp.UNSEEN, hp.UNSEEN, s_hat_arr - s_true[np.newaxis, ...])
 
+    filter_bad_res = os.environ.get("FURAX_CS_FILTER_BAD_RES", "0") == "1"
+
     cl_list = []
     for i in tqdm(range(res.shape[0]), desc="Computing Residual BB Spectra"):
         cl = cast(Float[Array, " 6 L"], hp.anafast(res[i]))
+        if filter_bad_res == 1 and cl[2][ell_range].max() > 1e-5:
+            continue
         cl_list.append(cl[2][ell_range])
 
     cl_mean = np.mean(cl_list, axis=0) / fsky
