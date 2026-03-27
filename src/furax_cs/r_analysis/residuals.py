@@ -12,6 +12,7 @@ from jaxtyping import (
     Int,
 )
 from tqdm import tqdm
+from ..logging_utils import hint, info , warning
 
 from .utils import expand_stokes
 
@@ -83,8 +84,13 @@ def compute_statistical_res(
     res_stat = np.where(res == hp.UNSEEN, hp.UNSEEN, res - s_syst_arr[np.newaxis, ...])
 
     cl_list = []
-    for i in tqdm(range(res_stat.shape[0]), desc="Computing Statistical BB Spectra"):
+    #for i in tqdm(range(res_stat.shape[0]), desc="Computing Statistical BB Spectra"):
+    for i in range(res_stat.shape[0]):
         cl = cast(Float[Array, " 6 L"], hp.anafast(res_stat[i]))
+        if max(cl[2][ell_range]) > 6e-6:
+            warning(f"Realization {i}: min BB={cl[2][ell_range].min():.2e}, max BB={cl[2][ell_range].max():.2e}")
+        else:
+            info(f"Realization {i}: min BB={cl[2][ell_range].min():.2e}, max BB={cl[2][ell_range].max():.2e}")
         cl_list.append(cl[2][ell_range])
 
     cl_mean = np.mean(cl_list, axis=0) / fsky

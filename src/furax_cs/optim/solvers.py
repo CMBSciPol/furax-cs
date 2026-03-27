@@ -20,6 +20,12 @@ Solver: TypeAlias = Union[optx.BestSoFarMinimiser, str]
 
 
 class ActiveSetMinimiser(optx.OptaxMinimiser):
+    cooldown_steps: int
+
+    def __init__(self, optim, atol, rtol, cooldown_steps=20, **kwargs):
+        super().__init__(optim, atol=atol, rtol=rtol, **kwargs)
+        self.cooldown_steps = cooldown_steps
+
     def terminate(
         self,
         fn: Any,
@@ -30,7 +36,14 @@ class ActiveSetMinimiser(optx.OptaxMinimiser):
         tags: frozenset[object],
     ) -> tuple[Bool[Array, ""], optx.RESULTS]:
         del fn, args, options
-        terminate = jnp.where(state.opt_state.constraints_released, False, state.terminate)
+        # Don't terminate if constraints were released this iteration
+        override = state.opt_state.constraints_released
+        # Don't terminate within cooldown_steps after a constraint release,
+        # to give the solver time to adjust the newly freed variables
+        steps_since_release = state.opt_state.count - state.opt_state.last_release_step
+        in_cooldown = steps_since_release < self.cooldown_steps
+        override = override | in_cooldown
+        terminate = jnp.where(override, False, state.terminate)
         return terminate, optx.RESULTS.successful
 
 

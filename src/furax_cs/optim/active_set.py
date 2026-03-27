@@ -281,6 +281,7 @@ class ActiveSetState(NamedTuple):
     direction_state: optax.OptState
     linesearch_state: optax.OptState
     constraints_released: Bool[Array, ""]
+    last_release_step: Int[Array, ""]
 
 
 def active_set(
@@ -348,6 +349,7 @@ def active_set(
             direction_state=direction_solver.init(params),
             linesearch_state=linesearch_solver.init(params),
             constraints_released=jnp.array(False),
+            last_release_step=jnp.array(-100, dtype=jnp.int32),
         )
 
     def update_fn(
@@ -408,7 +410,10 @@ def active_set(
         # --- FIX 1: Project Direction (Output Masking) ---
         # CRITICAL: Adam has momentum. Even if input grad is 0, output `pk` might not be.
         # We must force pk to 0 on active constraints to stop pushing into the wall.
-        pk = jax.tree.map(lambda p, pk: jnp.where(p == 0, pk, 0.0), state.pivot, pk)
+        # NOTE: Use updated `pivot` (after constraint release), not `state.pivot`,
+        # so that newly released constraints can contribute to the search direction
+        # on the same iteration they are released.
+        pk = jax.tree.map(lambda p, pk: jnp.where(p == 0, pk, 0.0), pivot, pk)
         # pk = otu.tree_where(pivot_is_zero, pk, otu.tree_full_like(pk, 0))
 
         if verbose:
@@ -484,6 +489,10 @@ def active_set(
         # So physical update = internal update * xscale
         updates_phys = otu.tree_mul(final_update_int, state.xscale)
 
+        new_last_release = jnp.where(
+            constraints_released, state.count + 1, state.last_release_step
+        )
+
         new_state = ActiveSetState(
             count=state.count + 1,
             pivot=final_pivot,
@@ -497,6 +506,7 @@ def active_set(
             direction_state=new_dir_state,
             linesearch_state=new_ls_state,
             constraints_released=constraints_released,
+            last_release_step=new_last_release,
         )
 
         return updates_phys, new_state

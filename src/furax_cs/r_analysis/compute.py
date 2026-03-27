@@ -430,7 +430,7 @@ def compute_group(
         cl_total_res, total_maps = compute_total_res(combined_cmb_recon, s_true, f_sky, ell_range)
         info(f"Total residuals: min={np.min(cl_total_res):.2e}, max={np.max(cl_total_res):.2e}")
 
-    use_classic_stat = os.environ.get("FURAX_CS_CLASSIC_STAT", "0") == "1"
+    use_classic_stat = os.environ.get("FURAX_CS_CLASSIC_STAT", "1") == "1"
     if use_classic_stat and syst_map is not None:
         hint("Will compute statistical residuals directly")
         cl_stat_res, stat_maps = compute_statistical_res(

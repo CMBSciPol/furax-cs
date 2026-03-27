@@ -159,7 +159,7 @@ EXAMPLES:
     parser.add_argument(
         "--vmap-batch",
         type=int,
-        default=10,
+        default=1,
         help="Number of noise simulations per vmap batch. "
         "Use 1 to disable vmap and run a serial for-loop of JIT'd single runs.",
     )

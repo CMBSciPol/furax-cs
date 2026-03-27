@@ -36,6 +36,7 @@ import os
 
 os.environ["EQX_ON_ERROR"] = "nan"
 import argparse
+from importlib.resources import files as pkg_files
 from time import perf_counter
 from typing import Any
 
@@ -70,6 +71,7 @@ from furax_cs import (
     generate_noise_operator,
     get_instrument,
     get_mask,
+    kmeans_clusters,
     load_cmb_map,
     load_fg_map,
     load_from_cache,
@@ -77,9 +79,67 @@ from furax_cs import (
     sanitize_mask_name,
 )
 from furax_cs.logging_utils import info, success
-from jax_healpy.clustering import get_cutout_from_mask, get_fullmap_from_cutout
+from jax_healpy.clustering import (
+    get_cutout_from_mask,
+    get_fullmap_from_cutout,
+    normalize_by_first_occurrence,
+)
 
 jax.config.update("jax_enable_x64", True)
+
+# Mapping from parameter name to precomputed pixel subset filename
+_PIXEL_SUBSET_FILES = {
+    "beta_dust": "pixel_subsets_from_true_d1_s1_Bd_nbins100.npy",
+    "temp_dust": "pixel_subsets_from_true_d1_s1_Td_nbins100.npy",
+    "beta_pl": "pixel_subsets_from_true_d1_s1_Bs_nbins100.npy",
+}
+
+
+def load_precomputed_clusters(param_name: str, indices: Array) -> tuple[Array, int]:
+    """Load precomputed pixel subset clusters for a parameter.
+
+    Returns the masked+normalized cluster array and the number of unique clusters.
+    """
+    filename = _PIXEL_SUBSET_FILES[param_name]
+    path = pkg_files("furax_cs").joinpath("data", "pixelsubset", filename)
+    full_sky = jnp.array(np.load(str(path)))
+    masked = full_sky[indices]
+    n_clusters = int(jnp.unique(masked).size)
+    normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
+    return normalized, n_clusters
+
+
+def load_patches_from_file(path: str, indices: Array) -> tuple[Array, int]:
+    """Load a full-sky patches .npy file and extract valid pixels.
+
+    The file should be a float64 array of shape ``(npix,)`` where valid pixels
+    have bin indices (0.0, 1.0, ...) and masked pixels have ``hp.UNSEEN``.
+
+    Returns the masked+normalized cluster array and the number of unique clusters.
+    """
+    full_sky = jnp.array(np.load(path))
+    masked = full_sky[indices].astype(jnp.int64)
+    n_clusters = int(jnp.unique(masked).size)
+    normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
+    normalized = masked.astype(jnp.int64)
+    return normalized, n_clusters
+
+
+def parse_cluster_specs(cluster_args: list[str]) -> dict[str, str | int]:
+    """Parse the -c argument values into a dict keyed by parameter name.
+
+    Returns dict mapping param name -> 'true', int count, or .npy file path.
+    """
+    param_names = ["beta_dust", "temp_dust", "beta_pl"]
+    specs = {}
+    for name, val in zip(param_names, cluster_args):
+        if val.lower() == "true":
+            specs[name] = "true"
+        elif val.endswith(".npy"):
+            specs[name] = val
+        else:
+            specs[name] = int(val)
+    return specs
 
 
 def parse_args() -> argparse.Namespace:
@@ -163,7 +223,34 @@ def parse_args() -> argparse.Namespace:
         default=[64, 32, 16],
         help=(
             "List of three target nside values (for ud_grade downgrading) corresponding to "
-            "beta_dust, temp_dust, beta_pl respectively"
+            "beta_dust, temp_dust, beta_pl respectively. Used when -pc and -c are not provided."
+        ),
+    )
+    parser.add_argument(
+        "-pc",
+        "--patch-count",
+        type=int,
+        nargs=3,
+        default=None,
+        help=(
+            "K-means patch counts for [beta_dust, temp_dust, beta_pl]. "
+            "When provided, uses K-means clustering instead of ud_grade. "
+            "Example: --patch-count 100 50 50"
+        ),
+    )
+    parser.add_argument(
+        "-c",
+        "--clusters",
+        type=str,
+        nargs=3,
+        default=None,
+        help=(
+            "Cluster source for [beta_dust, temp_dust, beta_pl]. "
+            "Each value is 'true' (precomputed pixel subsets from true params), "
+            "an integer (K-means with N clusters), "
+            "or a path to a .npy file (full-sky patches). "
+            "Overrides -pc when provided. "
+            "Precomputed 'true' subsets only available for tag c1d1s1."
         ),
     )
     parser.add_argument(
@@ -286,9 +373,39 @@ def main():
     # Step 1: Parse arguments and validate
     args = parse_args()
 
+    # Parse cluster specs (-c flag)
+    cluster_specs = None
+    if args.clusters is not None:
+        cluster_specs = parse_cluster_specs(args.clusters)
+        if any(v == "true" for v in cluster_specs.values()) and args.tag != "c1d1s1":
+            raise ValueError(
+                f"Precomputed pixel subsets are only available for tag 'c1d1s1', got '{args.tag}'"
+            )
+
+    # Determine clustering mode: cluster_specs (-c) > kmeans (-pc) > multires (-ud)
+    use_kmeans = cluster_specs is not None or args.patch_count is not None
+
     # Setup output directory
     if args.name is not None:
         out_folder = f"{args.output}/{args.name}"
+    elif use_kmeans:
+        def _spec_label(v):
+            if v == "true":
+                return "true"
+            if isinstance(v, str) and v.endswith(".npy"):
+                return "file"
+            return str(v)
+
+        if cluster_specs is not None:
+            bd_label = _spec_label(cluster_specs["beta_dust"])
+            td_label = _spec_label(cluster_specs["temp_dust"])
+            bs_label = _spec_label(cluster_specs["beta_pl"])
+        else:
+            bd_label = str(args.patch_count[0])
+            td_label = str(args.patch_count[1])
+            bs_label = str(args.patch_count[2])
+        patches = f"BD{bd_label}_TD{td_label}_BS{bs_label}"
+        out_folder = f"{args.output}/fgbuster_kmeans_{args.tag}_{patches}_{args.instrument}_{sanitize_mask_name(args.mask)}_{int(args.noise_ratio * 100)}"
     else:
         ud_grades = f"BD{int(args.target_ud_grade[0])}_TD{int(args.target_ud_grade[1])}_BS{int(args.target_ud_grade[2])}"
         out_folder = f"{args.output}/fgbuster_multires_{args.tag}_{ud_grades}_{args.instrument}_{sanitize_mask_name(args.mask)}_{int(args.noise_ratio * 100)}"
@@ -331,18 +448,91 @@ def main():
 
     d_cutout = get_cutout_from_mask(d, indices, axis=1)
 
-    # Step 5: Perform multi-resolution clustering for patch indices
-    target_ud_grade = {
-        "beta_dust": int(args.target_ud_grade[0]),
-        "temp_dust": int(args.target_ud_grade[1]),
-        "beta_pl": int(args.target_ud_grade[2]),
-    }
-    info(
-        f"Computing multi-resolution clusters: beta_dust@NS{target_ud_grade['beta_dust']}, "
-        f"temp_dust@NS{target_ud_grade['temp_dust']}, beta_pl@NS{target_ud_grade['beta_pl']}"
-    )
+    # Step 5: Perform clustering for patch indices (mode-dependent)
+    if use_kmeans:
+        # --- K-means / precomputed mode ---
+        if cluster_specs is not None:
+            patch_counts = {
+                "beta_dust": (
+                    cluster_specs["beta_dust"]
+                    if isinstance(cluster_specs["beta_dust"], int)
+                    else None
+                ),
+                "temp_dust": (
+                    cluster_specs["temp_dust"]
+                    if isinstance(cluster_specs["temp_dust"], int)
+                    else None
+                ),
+                "beta_pl": (
+                    cluster_specs["beta_pl"]
+                    if isinstance(cluster_specs["beta_pl"], int)
+                    else None
+                ),
+            }
+        else:
+            patch_counts = {
+                "beta_dust": args.patch_count[0],
+                "temp_dust": args.patch_count[1],
+                "beta_pl": args.patch_count[2],
+            }
 
-    cutout_clusters = multires_clusters(mask, indices, target_ud_grade, nside)
+        # Load precomputed clusters where requested
+        precomputed_clusters: dict[str, tuple] = {}
+        if cluster_specs is not None:
+            for param_name, spec in cluster_specs.items():
+                if spec == "true":
+                    precomputed_clusters[param_name] = load_precomputed_clusters(
+                        param_name, indices
+                    )
+                elif isinstance(spec, str) and spec.endswith(".npy"):
+                    precomputed_clusters[param_name] = load_patches_from_file(spec, indices)
+
+        # Determine n_clusters per param (for max_patches)
+        _param_to_patch_key = {
+            "beta_dust": "beta_dust_patches",
+            "temp_dust": "temp_dust_patches",
+            "beta_pl": "beta_pl_patches",
+        }
+        max_count = {}
+        for param_name, patch_key in _param_to_patch_key.items():
+            if param_name in precomputed_clusters:
+                max_count[patch_key] = precomputed_clusters[param_name][1]
+            else:
+                max_count[patch_key] = min(patch_counts[param_name], indices.size)
+
+        # Build K-means clusters for non-precomputed params
+        kmeans_regions = {
+            k: v
+            for k, v in max_count.items()
+            if k not in {_param_to_patch_key[p] for p in precomputed_clusters}
+        }
+        if kmeans_regions:
+            info(
+                f"Computing K-means clusters: "
+                + ", ".join(f"{k}={v}" for k, v in kmeans_regions.items())
+            )
+            cutout_clusters = kmeans_clusters(
+                jax.random.key(0), mask, indices, kmeans_regions, max_count
+            )
+        else:
+            cutout_clusters = {}
+
+        # Insert precomputed clusters
+        for param_name, (cluster_arr, _) in precomputed_clusters.items():
+            cutout_clusters[_param_to_patch_key[param_name]] = cluster_arr
+
+    else:
+        # --- Multi-resolution (ud_grade) mode ---
+        target_ud_grade = {
+            "beta_dust": int(args.target_ud_grade[0]),
+            "temp_dust": int(args.target_ud_grade[1]),
+            "beta_pl": int(args.target_ud_grade[2]),
+        }
+        info(
+            f"Computing multi-resolution clusters: beta_dust@NS{target_ud_grade['beta_dust']}, "
+            f"temp_dust@NS{target_ud_grade['temp_dust']}, beta_pl@NS{target_ud_grade['beta_pl']}"
+        )
+        cutout_clusters = multires_clusters(mask, indices, target_ud_grade, nside)
 
     # Convert cutout clusters to full-sky maps for FGBuster
     # FGBuster needs full-sky maps where masked pixels have max cluster index

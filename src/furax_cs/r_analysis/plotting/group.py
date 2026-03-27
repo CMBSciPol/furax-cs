@@ -114,8 +114,13 @@ def plot_all_cl_residuals(
                     linewidth=linewidth,
                     label=None,
                 )
+        FURAX_CS_ALLOW_FULLSKY = "r=3e-3" in name
+        if FURAX_CS_ALLOW_FULLSKY:
+            # label should be cl_obs
+            plt.plot([], [], color="black", linestyle="--", label=r"$C_\ell^{\mathrm{obs}}$")
+        else:
+            plt.plot([], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)")
 
-        plt.plot([], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)")
         plt.plot(
             [], [], color="black", linestyle="-", label=r"Systematic ($C_\ell^{\mathrm{syst}}$)"
         )
