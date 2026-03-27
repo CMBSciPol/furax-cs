@@ -439,6 +439,9 @@ def compute_group(
         )
     elif cl_total_res is not None and cl_syst_res is not None:
         hint("Will compute statistical residuals from total and systematic residuals")
+        assert (
+            syst_map is not None
+        ), "syst_map must be available to compute stat_maps from total and systematic residuals"
         cl_stat_res = cl_total_res - cl_syst_res
         stat_maps = total_maps - syst_map[np.newaxis]
         info(f"Statistical residuals: min={np.min(cl_stat_res):.2e}, max={np.max(cl_stat_res):.2e}")
