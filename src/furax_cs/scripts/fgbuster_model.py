@@ -389,6 +389,7 @@ def main():
     if args.name is not None:
         out_folder = f"{args.output}/{args.name}"
     elif use_kmeans:
+
         def _spec_label(v):
             if v == "true":
                 return "true"
@@ -464,9 +465,7 @@ def main():
                     else None
                 ),
                 "beta_pl": (
-                    cluster_specs["beta_pl"]
-                    if isinstance(cluster_specs["beta_pl"], int)
-                    else None
+                    cluster_specs["beta_pl"] if isinstance(cluster_specs["beta_pl"], int) else None
                 ),
             }
         else:
@@ -508,7 +507,7 @@ def main():
         }
         if kmeans_regions:
             info(
-                f"Computing K-means clusters: "
+                "Computing K-means clusters: "
                 + ", ".join(f"{k}={v}" for k, v in kmeans_regions.items())
             )
             cutout_clusters = kmeans_clusters(

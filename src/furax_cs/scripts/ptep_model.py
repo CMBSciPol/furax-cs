@@ -327,7 +327,10 @@ def main():
             single_run_jit = jax.jit(single_run)
             results_list = list(
                 tqdm(
-                    [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
+                    [
+                        single_run_jit(i)
+                        for i in range(args.seed_start, args.seed_start + nb_noise_sim)
+                    ],
                     desc="Running noise simulations",
                 )
             )
@@ -337,7 +340,9 @@ def main():
             vmapped_run_jit = jax.jit(jax.vmap(single_run))
             seeds = list(range(args.seed_start, args.seed_start + nb_noise_sim))
             batches = []
-            for i in tqdm(range(0, nb_noise_sim, args.vmap_batch), desc="Running noise simulations"):
+            for i in tqdm(
+                range(0, nb_noise_sim, args.vmap_batch), desc="Running noise simulations"
+            ):
                 batch_seeds = jnp.array(seeds[i : i + args.vmap_batch])
                 batches.append(vmapped_run_jit(batch_seeds))
             results = jax.tree.map(lambda *xs: jnp.concatenate(xs, axis=0), *batches)

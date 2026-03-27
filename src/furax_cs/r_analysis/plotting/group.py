@@ -119,7 +119,9 @@ def plot_all_cl_residuals(
             # label should be cl_obs
             plt.plot([], [], color="black", linestyle="--", label=r"$C_\ell^{\mathrm{obs}}$")
         else:
-            plt.plot([], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)")
+            plt.plot(
+                [], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)"
+            )
 
         plt.plot(
             [], [], color="black", linestyle="-", label=r"Systematic ($C_\ell^{\mathrm{syst}}$)"
@@ -147,7 +149,12 @@ def plot_all_cl_residuals(
         plt.tight_layout()
 
         file_suffix = group_name if group_name else "_".join(names)
-        save_or_show(f"bb_spectra_{file_suffix}", output_format, output_dir=output_dir, transparent=transparent)
+        save_or_show(
+            f"bb_spectra_{file_suffix}",
+            output_format,
+            output_dir=output_dir,
+            transparent=transparent,
+        )
 
 
 def plot_all_histograms(
@@ -345,4 +352,9 @@ def plot_all_r_estimation(
         plt.tight_layout()
 
         file_suffix = group_name if group_name else "_".join(names)
-        save_or_show(f"r_likelihood_{file_suffix}", output_format, output_dir=output_dir, transparent=transparent)
+        save_or_show(
+            f"r_likelihood_{file_suffix}",
+            output_format,
+            output_dir=output_dir,
+            transparent=transparent,
+        )

@@ -304,9 +304,7 @@ def compute_group(
         "beta_pl_patches": 0,
     }
 
-    info(
-        format_residual_flags(flags["compute_syst"], flags["compute_total"])
-    )
+    info(format_residual_flags(flags["compute_syst"], flags["compute_total"]))
 
     for folder in tqdm(folders, desc=f"  Folders for {title}", leave=False, unit="folder"):
         # Load results once per folder
@@ -436,7 +434,9 @@ def compute_group(
         cl_stat_res, stat_maps = compute_statistical_res(
             combined_cmb_recon, s_true, f_sky, ell_range, syst_map
         )
-        info(f"Statistical residuals (classic): min={np.min(cl_stat_res):.2e}, max={np.max(cl_stat_res):.2e}")
+        info(
+            f"Statistical residuals (classic): min={np.min(cl_stat_res):.2e}, max={np.max(cl_stat_res):.2e}"
+        )
     elif cl_total_res is not None and cl_syst_res is not None:
         hint("Will compute statistical residuals from total and systematic residuals")
         cl_stat_res = cl_total_res - cl_syst_res
@@ -463,7 +463,9 @@ def compute_group(
     cl_bb_obs, cl_bb_r1, cl_bb_lens = None, None, None
     if flags["compute_total"] and flags["needs_r_estimation"] and cl_total_res is not None:
         cl_for_r = cl_total_res
-        noise_for_r = np.maximum(cl_stat_res, 0) if cl_stat_res is not None else np.zeros_like(ell_range)
+        noise_for_r = (
+            np.maximum(cl_stat_res, 0) if cl_stat_res is not None else np.zeros_like(ell_range)
+        )
         (
             r_best,
             sigma_r_neg,

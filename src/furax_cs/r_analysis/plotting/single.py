@@ -336,7 +336,12 @@ def _create_variance_vs_r_plot(
     plt.tight_layout()
 
     filename_suffix = "total" if is_total else patch_key.replace("_patches", "")
-    save_or_show(f"variance_vs_residual_r_{filename_suffix}", output_format, output_dir=output_dir, transparent=transparent)
+    save_or_show(
+        f"variance_vs_residual_r_{filename_suffix}",
+        output_format,
+        output_dir=output_dir,
+        transparent=transparent,
+    )
     plt.close()
 
 
@@ -513,7 +518,9 @@ def plot_single_file_grouped(
             fig.tight_layout()
             suffix = patch_key.replace("_patches", "")
             save_or_show(
-                f"variance_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir,
+                f"variance_vs_clusters_{suffix}_grouped",
+                output_format,
+                output_dir=output_dir,
                 transparent=transparent,
             )
             plt.close()
@@ -538,5 +545,10 @@ def plot_single_file_grouped(
             ax.legend()
             fig.tight_layout()
             suffix = patch_key.replace("_patches", "")
-            save_or_show(f"nll_vs_clusters_{suffix}_grouped", output_format, output_dir=output_dir, transparent=transparent)
+            save_or_show(
+                f"nll_vs_clusters_{suffix}_grouped",
+                output_format,
+                output_dir=output_dir,
+                transparent=transparent,
+            )
             plt.close()

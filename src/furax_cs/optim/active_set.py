@@ -486,9 +486,7 @@ def active_set(
         # So physical update = internal update * xscale
         updates_phys = otu.tree_mul(final_update_int, state.xscale)
 
-        new_last_release = jnp.where(
-            constraints_released, state.count + 1, state.last_release_step
-        )
+        new_last_release = jnp.where(constraints_released, state.count + 1, state.last_release_step)
 
         new_state = ActiveSetState(
             count=state.count + 1,

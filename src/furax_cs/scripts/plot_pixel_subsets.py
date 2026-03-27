@@ -8,15 +8,13 @@ Row 3: Shuffled labels (randomized colors)
 """
 
 from importlib.resources import files as pkg_files
-from pathlib import Path
 
 import healpy as hp
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from jax_healpy.clustering import normalize_by_first_occurrence
-
 from furax_cs import get_mask
+from jax_healpy.clustering import normalize_by_first_occurrence
 
 # --- Configuration ---
 PARAMS = [
@@ -62,9 +60,7 @@ def main():
         # Row 2: Masked + Normalized
         masked = jnp.array(raw)[indices].astype(jnp.int64)
         n_clusters = int(jnp.unique(masked).size)
-        normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(
-            jnp.int64
-        )
+        normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
         fullsky_norm = np.full(npix, hp.UNSEEN)
         fullsky_norm[np.asarray(indices)] = np.asarray(normalized).astype(np.float64)
 

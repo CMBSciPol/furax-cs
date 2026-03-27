@@ -528,6 +528,7 @@ def _build_result_from_pytrees(
     patches_beta_dust = np.asarray(patches_map["beta_dust_patches"])
     patches_temp_dust = np.asarray(patches_map["temp_dust_patches"])
     patches_beta_pl = np.asarray(patches_map["beta_pl_patches"])
+
     # CL data
     def _opt_arr(d, key):
         v = d.get(key)

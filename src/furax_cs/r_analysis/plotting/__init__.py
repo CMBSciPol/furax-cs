@@ -271,13 +271,21 @@ def plot_indiv_results(
     if indiv_flags.get("plot_params"):
         assert params_map is not None, "No params_map found for plotting."
         plot_params(
-            name, params_map, output_format, output_dir=output_dir, subfolder=subfolder,
+            name,
+            params_map,
+            output_format,
+            output_dir=output_dir,
+            subfolder=subfolder,
             transparent=transparent,
         )
     if indiv_flags.get("plot_patches"):
         assert patches_map is not None, "No patches_map found for plotting."
         plot_patches(
-            name, patches_map, output_format, output_dir=output_dir, subfolder=subfolder,
+            name,
+            patches_map,
+            output_format,
+            output_dir=output_dir,
+            subfolder=subfolder,
             transparent=transparent,
         )
 
@@ -296,14 +304,22 @@ def plot_indiv_results(
     if indiv_flags.get("plot_systematic_maps"):
         assert syst_map is not None, "No systematic residual map found for plotting."
         plot_systematic_residual_maps(
-            name, syst_map, output_format, output_dir=output_dir, subfolder=subfolder,
+            name,
+            syst_map,
+            output_format,
+            output_dir=output_dir,
+            subfolder=subfolder,
             transparent=transparent,
         )
 
     if indiv_flags.get("plot_statistical_maps"):
         assert stat_maps is not None, "No statistical residual maps found for plotting."
         plot_statistical_residual_maps(
-            name, stat_maps, output_format, output_dir=output_dir, subfolder=subfolder,
+            name,
+            stat_maps,
+            output_format,
+            output_dir=output_dir,
+            subfolder=subfolder,
             transparent=transparent,
         )
 
@@ -432,7 +448,11 @@ def plot_aggregate_results(
 
     if aggregate_flags.get("plot_r_vs_v"):
         plot_variance_vs_r(
-            stacked_titles, stacked_cmb, stacked_r, output_format, output_dir=output_dir,
+            stacked_titles,
+            stacked_cmb,
+            stacked_r,
+            output_format,
+            output_dir=output_dir,
             transparent=transparent,
         )
         plt.close("all")
@@ -591,7 +611,11 @@ def run_grouped_plot(
         all_groups_collected.append((group_label, names, kw_to_plot))
 
     plot_single_file_grouped(
-        all_groups_collected, single_flags, output_format, output_dir, colors=colors,
+        all_groups_collected,
+        single_flags,
+        output_format,
+        output_dir,
+        colors=colors,
         transparent=transparent,
     )
     return 0

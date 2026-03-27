@@ -590,7 +590,10 @@ def main():
             single_run_jit = jax.jit(single_run)
             results_list = list(
                 tqdm(
-                    [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
+                    [
+                        single_run_jit(i)
+                        for i in range(args.seed_start, args.seed_start + nb_noise_sim)
+                    ],
                     desc="Running noise simulations",
                 )
             )

@@ -48,7 +48,13 @@ def plot_params(
             format="%.4f",
         )
 
-    save_or_show(f"params_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
+    save_or_show(
+        f"params_{name}",
+        output_format,
+        output_dir=output_dir,
+        subfolder=subfolder,
+        transparent=transparent,
+    )
     base_dir = os.path.join(output_dir, subfolder) if subfolder else output_dir
     os.makedirs(base_dir, exist_ok=True)
     params_dict = {
@@ -111,7 +117,13 @@ def plot_patches(
             bgcolor=(0.0,) * 4,
             cbar=True,
         )
-    save_or_show(f"patches_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
+    save_or_show(
+        f"patches_{name}",
+        output_format,
+        output_dir=output_dir,
+        subfolder=subfolder,
+        transparent=transparent,
+    )
 
 
 def plot_cmb_reconstructions(
@@ -182,7 +194,13 @@ def plot_cmb_reconstructions(
         bgcolor=(0,) * 4,
     )
     plt.title("CMB Reconstruction")
-    save_or_show(f"cmb_recon_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
+    save_or_show(
+        f"cmb_recon_{name}",
+        output_format,
+        output_dir=output_dir,
+        subfolder=subfolder,
+        transparent=transparent,
+    )
 
 
 def plot_systematic_residual_maps(
@@ -243,7 +261,7 @@ def plot_statistical_residual_maps(
     transparent: bool = True,
 ) -> None:
     """Plot statistical residual Q/U maps for a single configuration."""
-    indx = [0 , 1 , 2]
+    indx = [0, 1, 2]
     for i in indx:
         if i >= len(stat_maps):
             info(f"Only {len(stat_maps)} statistical residual maps available. Skipping index {i}.")
@@ -344,7 +362,13 @@ def plot_cl_residuals(
 
     plt.tight_layout()
 
-    save_or_show(f"bb_spectra_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
+    save_or_show(
+        f"bb_spectra_{name}",
+        output_format,
+        output_dir=output_dir,
+        subfolder=subfolder,
+        transparent=transparent,
+    )
 
 
 def plot_r_estimator(
@@ -401,7 +425,13 @@ def plot_r_estimator(
     plt.legend(**legend_kwargs)
     plt.tight_layout()
 
-    save_or_show(f"r_likelihood_{name}", output_format, output_dir=output_dir, subfolder=subfolder, transparent=transparent)
+    save_or_show(
+        f"r_likelihood_{name}",
+        output_format,
+        output_dir=output_dir,
+        subfolder=subfolder,
+        transparent=transparent,
+    )
 
     info(f"Estimated r (Reconstructed): {r_best:.4e} (+{sigma_r_pos:.1e}, -{sigma_r_neg:.1e})")
 
