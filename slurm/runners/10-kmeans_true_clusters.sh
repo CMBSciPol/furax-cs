@@ -52,7 +52,7 @@ submit_job() {
 # Configuration
 # =============================================================================
 
-RTOL=1e-16
+RTOL=1e-18
 ATOL=1e-18
 
 SKY=c1d1s1
@@ -64,22 +64,20 @@ OUTPUT_DIR="RESULTS/KMEANS_TRUE_CLUSTERS"
 # =============================================================================
 
 job_ids=()
-
-for MASK in GAL020 GAL040 GAL060; do
-    NAME="kmeans_${SKY}_BDtrue_TDtrue_BStrue_${MASK}"
-    if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
-        jid=$(submit_job "KM_TRUE_${MASK}" "" KMEANS_TRUE \
-            kmeans-model -n 64 -ns 40 -nr 1.0 \
-            -c true true true \
-            -tag ${SKY} -m $MASK -i LiteBIRD \
-            -s $SOLVER -mi 2000 \
-            --rtol $RTOL --atol $ATOL \
-            --name $NAME -o $OUTPUT_DIR)
-        job_ids+=("$jid")
-    else
-        echo "Skipping $NAME (already done)"
-    fi
-done
+MASK="ALL-GALACTIC"
+NAME="kmeans_${SKY}_BDtrue_TDtrue_BStrue_${MASK}"
+if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
+    submit_job "KM_TRUE_${MASK}" "" KMEANS_TRUE \
+        kmeans-model -n 64 -ns 40 -nr 1.0 \
+        -c true true true \
+        -tag ${SKY} -m $MASK -i LiteBIRD \
+        -s $SOLVER -mi 2000 \
+        --rtol $RTOL --atol $ATOL \
+        --name $NAME -o $OUTPUT_DIR
+    job_ids+=("$jid")
+else
+    echo "Skipping $NAME (already done)"
+fi
 
 # Snapshot step
 deps=$(IFS=:; echo "${job_ids[*]}")

@@ -22,7 +22,7 @@ Solver: TypeAlias = Union[optx.BestSoFarMinimiser, str]
 class ActiveSetMinimiser(optx.OptaxMinimiser):
     cooldown_steps: int
 
-    def __init__(self, optim, atol, rtol, cooldown_steps=20, **kwargs):
+    def __init__(self, optim, atol, rtol, cooldown_steps=100, **kwargs):
         super().__init__(optim, atol=atol, rtol=rtol, **kwargs)
         self.cooldown_steps = cooldown_steps
 

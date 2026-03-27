@@ -410,10 +410,7 @@ def active_set(
         # --- FIX 1: Project Direction (Output Masking) ---
         # CRITICAL: Adam has momentum. Even if input grad is 0, output `pk` might not be.
         # We must force pk to 0 on active constraints to stop pushing into the wall.
-        # NOTE: Use updated `pivot` (after constraint release), not `state.pivot`,
-        # so that newly released constraints can contribute to the search direction
-        # on the same iteration they are released.
-        pk = jax.tree.map(lambda p, pk: jnp.where(p == 0, pk, 0.0), pivot, pk)
+        pk = jax.tree.map(lambda p, pk: jnp.where(p == 0, pk, 0.0), state.pivot, pk)
         # pk = otu.tree_where(pivot_is_zero, pk, otu.tree_full_like(pk, 0))
 
         if verbose:

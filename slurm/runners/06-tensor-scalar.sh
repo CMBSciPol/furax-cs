@@ -54,7 +54,7 @@ submit_job() {
 # Configuration
 # =============================================================================
 
-RTOL=1e-16
+RTOL=1e-18
 ATOL=1e-18
 
 job_ids=()
@@ -96,14 +96,12 @@ run_kmeans() {
 }
 
 
-# 3–4. GAL020 best (BD=7500, TD=300, BS=300)
-run_kmeans "cr4d1s1" 7500 300 300 GAL020
+# 3–4. GAL020 best (BD=3000, TD=1500, BS=1500)
+run_kmeans "cr4d0s0" 30000 1500 1500 ALL
+run_kmeans "c1d0s0" 30000 1500 1500 ALL
 
-# 5–6. GAL040 best (BD=9000, TD=6000, BS=200)
-run_kmeans "cr4d1s1" 9000 6000 200 GAL040
-
-# 7–8. GAL060 best (BD=9685, TD=7000, BS=500)
-run_kmeans "cr4d1s1" 9685 7000 500 GAL060
+run_kmeans "cr4d0s0" 1 1 1 ALL
+run_kmeans "c1d0s0" 1 1 1 ALL
 
 # =============================================================================
 # Analysis
