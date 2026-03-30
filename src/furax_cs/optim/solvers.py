@@ -371,6 +371,18 @@ def get_solver(
         Lower bounds for box projection (optax solvers only).
     upper : PyTree, optional
         Upper bounds for box projection (optax solvers only).
+    verbose_print : bool
+        If True, print per-step termination diagnostics for active-set
+        solvers via ``jax.debug.print`` (JIT-compatible).
+    min_steps : int
+        Minimum iterations before termination is considered
+        (active-set solvers only).
+    cooldown : int
+        Steps to suppress termination after a constraint release
+        (active-set solvers only).
+    max_linesearch_steps : int
+        Maximum line-search steps per iteration (active-set and
+        ``optax_lbfgs`` solvers).
 
     Returns
     -------
