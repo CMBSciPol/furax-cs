@@ -528,15 +528,6 @@ def _build_result_from_pytrees(
     patches_beta_dust = np.asarray(patches_map["beta_dust_patches"])
     patches_temp_dust = np.asarray(patches_map["temp_dust_patches"])
     patches_beta_pl = np.asarray(patches_map["beta_pl_patches"])
-    if (
-        np.all(patches_beta_dust == 0)
-        and np.all(patches_temp_dust == 0)
-        and np.all(patches_beta_pl == 0)
-    ):
-        raise ValueError(
-            f"All patch maps are zero for '{kw}'. params_list was empty "
-            "(all result folders failed). Cannot build a valid snapshot."
-        )
 
     # CL data
     def _opt_arr(d, key):

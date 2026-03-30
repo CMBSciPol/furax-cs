@@ -140,27 +140,24 @@ def banner(message: str, char: str = "=", width: int = 60) -> None:
     print(char * width)
 
 
-def format_residual_flags(compute_syst: bool, compute_stat: bool, compute_total: bool) -> str:
+def format_residual_flags(compute_syst: bool, compute_total: bool) -> str:
     """Format residual computation flags into a readable message.
 
     Args:
         compute_syst: Whether computing systematic residuals.
-        compute_stat: Whether computing statistical residuals.
         compute_total: Whether computing total residuals.
 
     Returns:
         Formatted message describing what will be computed.
 
     Example:
-        >>> format_residual_flags(True, False, False)
+        >>> format_residual_flags(True, False)
         'Computing: systematic residuals'
     """
     components = []
     if compute_syst:
         components.append("systematic")
-    if compute_stat:
-        components.append("statistical")
-    if compute_total and not (compute_syst and compute_stat):
+    if compute_total and not compute_syst:
         components.append("total")
 
     if not components:
