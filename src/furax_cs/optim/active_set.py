@@ -282,6 +282,10 @@ class ActiveSetState(NamedTuple):
     linesearch_state: optax.OptState
     constraints_released: Bool[Array, ""]
     last_release_step: Int[Array, ""]
+    # TNC-inspired termination fields
+    best_f: Scalar  # best function value seen so far
+    f_val: Scalar  # current function value
+    prev_f: Scalar  # previous function value
 
 
 def active_set(
@@ -292,7 +296,7 @@ def active_set(
     rescale_threshold: float = 1.3,
     stepmx_init: float = 10.0,
     max_constraints_to_release: Union[int, float] | None = None,
-    verbose: bool = False,
+    verbose_print: bool = False,
 ) -> optax.GradientTransformation:
     def init_fn(params: PyTree[Float[Array, " P"]]) -> ActiveSetState:
         lo = lower if lower is not None else otu.tree_full_like(params, -jnp.inf)
@@ -349,7 +353,10 @@ def active_set(
             direction_state=direction_solver.init(params),
             linesearch_state=linesearch_solver.init(params),
             constraints_released=jnp.array(False),
-            last_release_step=jnp.array(-100, dtype=jnp.int32),
+            last_release_step=jnp.array(-1, dtype=jnp.int32),
+            best_f=jnp.array(jnp.inf),
+            f_val=jnp.array(jnp.inf),
+            prev_f=jnp.array(jnp.inf),
         )
 
     def update_fn(
@@ -407,16 +414,8 @@ def active_set(
         # Use inner solver (Adam/LBFGS). Note: We pass internal gradients.
         pk, new_dir_state = direction_solver.update(grads_int_proj, current_dir_state, params)
 
-        # --- FIX 1: Project Direction (Output Masking) ---
-        # CRITICAL: Adam has momentum. Even if input grad is 0, output `pk` might not be.
-        # We must force pk to 0 on active constraints to stop pushing into the wall.
+        # --- FIX 4: AdaBelief nu degeneration fallback ---
         pk = jax.tree.map(lambda p, pk: jnp.where(p == 0, pk, 0.0), state.pivot, pk)
-        # pk = otu.tree_where(pivot_is_zero, pk, otu.tree_full_like(pk, 0))
-
-        if verbose:
-            jax.debug.print("grads_int: {}", grads_int)
-            jax.debug.print("pk: {}", pk)
-            jax.debug.print("Iter {i} | gnorm {g}", i=state.count, g=gnorm)
 
         # --- 6. Step Limit (spe) ---
         # Calculate maximum step `spe` along `pk` before hitting ANY bound.
@@ -502,6 +501,9 @@ def active_set(
             linesearch_state=new_ls_state,
             constraints_released=constraints_released,
             last_release_step=new_last_release,
+            best_f=jnp.minimum(state.best_f, value),
+            f_val=value,
+            prev_f=state.f_val,
         )
 
         return updates_phys, new_state

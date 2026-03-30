@@ -6,8 +6,8 @@
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
 RUN_LOCALLY=false
 
-ACCOUNT="rzt@v100"
-CONSTRAINT="v100-32g"
+ACCOUNT="tkc@h100"
+CONSTRAINT="h100"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
@@ -56,8 +56,12 @@ submit_job() {
 # Configuration
 # =============================================================================
 
-RTOL=1e-16
+RTOL=1e-18
 ATOL=1e-18
+COOLDOWN=50
+MIN_STEPS=200
+VERBOSE=true
+[ "$VERBOSE" = true ] && verbose_arg="--verbose" || verbose_arg=""
 
 SKY=c1d1s1
 SOLVER="ADABK0"
@@ -95,13 +99,14 @@ for BIN in 10 100 1000; do
     # Phase 2: Run kmeans with combined binned patches + ALL-GALACTIC mask
     if [ ! -f "$OUTPUT_DIR/KMEANS/$NAME/best_params.npz" ]; then
         jid=$(submit_job "KM_BIN${BIN}" "$BIN_DEP" KMEANS_BINNED \
-            kmeans-model -n 64 -ns 10 -nr 1.0 \
+            kmeans-model -n 64 -ns 40 -nr 1.0 \
             -c "$BIN_DIR/patches_beta_dust.npy" \
                "$BIN_DIR/patches_temp_dust.npy" \
                "$BIN_DIR/patches_beta_pl.npy" \
             -tag $SKY -m ALL-GALACTIC -i LiteBIRD \
             -s $SOLVER -mi 2000 \
             --rtol $RTOL --atol $ATOL \
+            --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
             --name $NAME -o "$OUTPUT_DIR/KMEANS")
         job_ids+=("$jid")
     else
@@ -124,6 +129,6 @@ submit_job "ANA_BINNING" "$DEP_ARGS" ANA_BINNING \
     -r 'binned' \
     -ird "$OUTPUT_DIR/KMEANS" \
     -o "$OUTPUT_DIR/SNAPSHOT/binning.parquet" \
-    -mi 2000 -s $SOLVER --sky $SKY -n 64 -i LiteBIRD --no-images
+    -mi 2000 -s optax_lbfgs --sky $SKY -n 64 -i LiteBIRD --no-images
 
 echo "=== Done ==="

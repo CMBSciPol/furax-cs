@@ -57,13 +57,17 @@ parquets_exist() {
 # Configuration
 # =============================================================================
 
-RTOL=1e-16
+RTOL=1e-18
 ATOL=1e-18
+COOLDOWN=50
+MIN_STEPS=200
+VERBOSE=true
+[ "$VERBOSE" = true ] && verbose_arg="--verbose" || verbose_arg=""
 
 SOLVER="ADABK0"
 OUTPUT_DIR="RESULTS/MULTIRES"
 SKY="c1d0s0"
-NS=100
+NS=40
 
 # =============================================================================
 # MultiRes MODELS (1)
@@ -78,6 +82,7 @@ if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
         ptep-model -n 64 -ns $NS -nr 1.0 -ud 64 0 2 \
         -tag $SKY -m GAL020 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 2000 -s $SOLVER \
         --rtol $RTOL --atol $ATOL \
+        --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
         --name $NAME)
     job_ids+=($jid)
 else
@@ -91,6 +96,7 @@ if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
         ptep-model -n 64 -ns $NS -nr 1.0 -ud 64 4 2 \
         -tag $SKY -m GAL040 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 2000 -s $SOLVER \
         --rtol $RTOL --atol $ATOL \
+        --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
         --name $NAME)
     job_ids+=($jid)
 else
@@ -104,6 +110,7 @@ if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
         ptep-model -n 64 -ns $NS -nr 1.0 -ud 64 8 4 \
         -tag $SKY -m GAL060 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 2000 -s $SOLVER \
         --rtol $RTOL --atol $ATOL \
+        --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
         --name $NAME)
     job_ids+=($jid)
 else

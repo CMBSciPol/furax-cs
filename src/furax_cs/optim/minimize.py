@@ -194,7 +194,7 @@ def minimize(
     lower_bound: PyTree[Float[Array, " P"]] | None = None,
     upper_bound: PyTree[Float[Array, " P"]] | None = None,
     precondition: bool = False,
-    solver_options: dict[str, Any] = {},
+    options: dict[str, Any] | None = None,
     refresh_steps: int = 10,
     **fn_kwargs: Any,
 ) -> tuple[PyTree[Float[Array, " P"]], UnifiedState]:
@@ -253,13 +253,17 @@ def minimize(
     else:
         from_opt = lambda x: x
 
-    solver_opts = solver_options if solver_options is not None else {}
+    _opts = options or {}
+    cooldown = _opts.get("cooldown", 20)
+    min_steps = _opts.get("min_steps", 10)
     solver, solver_type = get_solver(
         solver_name,
         rtol=rtol,
         atol=atol,
         lower=lower_bound,
         upper=upper_bound,
+        cooldown=cooldown,
+        min_steps=min_steps,
         **solver_opts,
     )
 
@@ -296,7 +300,7 @@ def minimize(
     elif solver_type == "scipy":
         # Scipy via vmap-compatible scipy_minimize
         method = solver_name.split("_")[1]
-        options = solver_options.get("options", {})
+        options = _opts
         if method == "tnc":
             options["ftol"] = atol
             options["gtol"] = rtol

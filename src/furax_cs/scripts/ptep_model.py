@@ -164,11 +164,22 @@ EXAMPLES:
         "Use 1 to disable vmap and run a serial for-loop of JIT'd single runs.",
     )
     parser.add_argument(
-        "-top_k",
-        "--top-k-release",
-        type=float,
-        default=None,
-        help="Fraction of constraints to release in active set solver (e.g., 0.1 for 10%%).",
+        "--cooldown",
+        type=int,
+        default=20,
+        help="Steps after a constraint release before termination is allowed (active set solvers).",
+    )
+    parser.add_argument(
+        "--min-steps",
+        type=int,
+        default=10,
+        help="Minimum iterations before termination is considered (active set solvers).",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose debug printing for active set solvers.",
     )
     parser.add_argument(
         "--name",
@@ -199,9 +210,10 @@ def main():
         out_folder = f"{args.output}/{args.name}"
     else:
         ud_grades = f"BD{int(args.target_ud_grade[0])}_TD{int(args.target_ud_grade[1])}_BS{int(args.target_ud_grade[2])}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
-        config = f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
-        if args.top_k_release is not None:
-            config += f"_topk{args.top_k_release}"
+        config = (
+            f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
+            f"_cd{args.cooldown}_ms{args.min_steps}"
+        )
         out_folder = f"{args.output}/ptep_{args.tag}_{ud_grades}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
 
     # Set up parameters
@@ -269,9 +281,8 @@ def main():
     lower_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), lower_bound, max_count)
     upper_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), upper_bound, max_count)
 
-    solver_options = {}
-    if args.top_k_release is not None:
-        solver_options["max_constraints_to_release"] = args.top_k_release
+    solver_options = {"verbose_print": args.verbose}
+    options = {"cooldown": args.cooldown, "min_steps": args.min_steps}
 
     def single_run(noise_id):
         key = jax.random.PRNGKey(noise_id)
@@ -290,6 +301,7 @@ def main():
             upper_bound=upper_bound_tree,
             precondition=args.cond,
             solver_options=solver_options,
+            options=options,
             nu=nu,
             N=N,
             d=noised_d,

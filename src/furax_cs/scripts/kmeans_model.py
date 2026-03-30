@@ -307,11 +307,22 @@ EXAMPLES:
         "Use 1 to disable vmap and run a serial for-loop of JIT'd single runs.",
     )
     parser.add_argument(
-        "-top_k",
-        "--top-k-release",
-        type=float,
-        default=None,
-        help="Fraction of constraints to release in active set solver (e.g., 0.1 for 10%%).",
+        "--cooldown",
+        type=int,
+        default=20,
+        help="Steps after a constraint release before termination is allowed (active set solvers).",
+    )
+    parser.add_argument(
+        "--min-steps",
+        type=int,
+        default=10,
+        help="Minimum iterations before termination is considered (active set solvers).",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose debug printing for active set solvers.",
     )
     parser.add_argument(
         "-ls",
@@ -392,9 +403,8 @@ def main():
         patches = f"BD{bd_label}_TD{td_label}_BS{bs_label}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
         config = (
             f"{args.solver}_cond{args.cond}_ls{args.linesearch}_noise{int(args.noise_ratio * 100)}"
+            f"_cd{args.cooldown}_ms{args.min_steps}"
         )
-        if args.top_k_release is not None:
-            config += f"_topk{args.top_k_release}"
 
         out_folder = f"{args.output}/kmeans_{args.tag}_{patches}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
 
@@ -488,10 +498,8 @@ def main():
         "beta_pl_patches": max_count["beta_pl"],
     }
 
-    solver_options = {}
-    if args.top_k_release is not None:
-        solver_options["max_constraints_to_release"] = args.top_k_release
-    solver_options["linesearch"] = args.linesearch
+    solver_options = {"linesearch": args.linesearch, "verbose_print": args.verbose}
+    options = {"cooldown": args.cooldown, "min_steps": args.min_steps}
 
     def compute_minimum_variance(
         T_d_patches: int,
@@ -556,6 +564,7 @@ def main():
                 upper_bound=upper_bound_tree,
                 precondition=args.cond,
                 solver_options=solver_options,
+                options=options,
                 nu=nu,
                 N=N,
                 d=noised_d,
