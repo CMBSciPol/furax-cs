@@ -2,15 +2,15 @@
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
 #!/bin/bash
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
-RUN_LOCALLY=dryrun
+RUN_LOCALLY=false
 
-ACCOUNT="rzt@v100"
-CONSTRAINT="v100-32g"
+ACCOUNT="tkc@h100"
+CONSTRAINT="h100"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
-QOS="qos_gpu-t3"
+QOS="qos_gpu_h100-t3"
 TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
@@ -54,8 +54,12 @@ submit_job() {
 # Configuration
 # =============================================================================
 
-RTOL=1e-16
+RTOL=1e-18
 ATOL=1e-18
+COOLDOWN=50
+MIN_STEPS=200
+VERBOSE=true
+[ "$VERBOSE" = true ] && verbose_arg="--verbose" || verbose_arg=""
 
 job_ids=()
 OUTPUT_DIR="RESULTS/TENSOR_TO_SCALAR_34"
@@ -63,9 +67,9 @@ OUTPUT_DIR="RESULTS/TENSOR_TO_SCALAR_34"
 echo "=== Running Tensor-to-Scalar Runs ==="
 
 NS=40
-NR=0.3
+NR=1.0
 MASK="ALL"
-SOLVER="ADABK2"
+SOLVER="ADABK0"
 MAX_ITER=2000
 INSTRUMENT="LiteBIRD"
 NSIDE=64
@@ -88,6 +92,7 @@ run_kmeans() {
             -tag $TAG -m $MASK -i $INSTRUMENT \
             -s $SOLVER -mi $MAX_ITER \
             --rtol $RTOL --atol $ATOL \
+            --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
             --name $NAME -o $OUTPUT_DIR)
         job_ids+=("$jid")
     else
@@ -96,14 +101,12 @@ run_kmeans() {
 }
 
 
-# 3–4. GAL020 best (BD=7500, TD=300, BS=300)
-run_kmeans "cr4d1s1" 7500 300 300 GAL020
+# 3–4. GAL020 best (BD=3000, TD=1500, BS=1500)
+run_kmeans "cr3d0s0" 30000 1500 1500 ALL
+run_kmeans "c1d0s0" 30000 1500 1500 ALL
 
-# 5–6. GAL040 best (BD=9000, TD=6000, BS=200)
-run_kmeans "cr4d1s1" 9000 6000 200 GAL040
-
-# 7–8. GAL060 best (BD=9685, TD=7000, BS=500)
-run_kmeans "cr4d1s1" 9685 7000 500 GAL060
+run_kmeans "cr3d0s0" 1 1 1 ALL
+run_kmeans "c1d0s0" 1 1 1 ALL
 
 # =============================================================================
 # Analysis
@@ -116,12 +119,12 @@ if [ -n "$deps" ]; then
 
     # Analysis for cr4d1s1
     submit_job ANA_CR4 "--dependency=afterany:$deps" ANA \
-        r_analysis snap -r "kmeans_cr4d1s1" -ird $OUTPUT_DIR \
+        r_analysis snap -r "kmeans_cr4d0s0" -ird $OUTPUT_DIR \
         -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP/tensor_to_scalar_cr4d1s1.parquet
 
     # Analysis for c1d1s1
     submit_job ANA_C1 "--dependency=afterany:$deps" ANA \
-        r_analysis snap -r "kmeans_c1d1s1" -ird $OUTPUT_DIR \
+        r_analysis snap -r "kmeans_c1d0s0" -ird $OUTPUT_DIR \
         -mi $MAX_ITER -s optax_lbfgs -n $NSIDE -i $INSTRUMENT -o $OUTPUT_DIR/SNAP/tensor_to_scalar_c1d1s1.parquet
 else
     echo "No new jobs submitted. Skipping analysis."

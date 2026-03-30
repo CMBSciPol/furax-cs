@@ -2,14 +2,14 @@
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
 RUN_LOCALLY=false
 
-ACCOUNT="rzt@v100"
-CONSTRAINT="v100-32g"
+ACCOUNT="tkc@h100"
+CONSTRAINT="h100"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
-QOS="qos_gpu-t3"
-TIME_LIMIT="05:00:00"
+QOS="qos_gpu_h100-t3"
+TIME_LIMIT="10:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
     --gres=gpu:$GPUS_PER_NODE --cpus-per-task=$CPUS_PER_TASK \
@@ -52,8 +52,12 @@ submit_job() {
 # Configuration
 # =============================================================================
 
-RTOL=1e-16
+RTOL=1e-18
 ATOL=1e-18
+COOLDOWN=50
+MIN_STEPS=200
+VERBOSE=true
+[ "$VERBOSE" = true ] && verbose_arg="--verbose" || verbose_arg=""
 
 SKY=c1d1s1
 SOLVER="ADABK0"
@@ -69,8 +73,7 @@ CONFIGS=(
     "10000 0 300 2"  # Case 7: B_DUST=10000, B_SYNC=300, Vary T_DUST
 )
 
-RANGE_LOW="50 100 150 200 250 300 350 400 450"
-RANGE_HIGH="50 100 200 300 500 1000 1500 2000 2500 3000 3500 4000 4500 5000 5500 6000 6500 7000 7500 8000 8500 9000 9500 10000"
+RANGE_HIGH="50 100 150 200 250 300 350 400 450 500 1000 1500 2000 2500 3000 3500 4000 4500 5000 5500 6000 6500 7000 7500 8000 8500 9000 9500 10000"
 
 # =============================================================================
 # K-Means runs
@@ -84,15 +87,15 @@ for config in "${CONFIGS[@]}"; do
 
     if [ "$VARY_IDX" -eq 1 ]; then
         VARY_NAME="B_DUST"
-        RANGE=$RANGE_LOW
+        RANGE=$RANGE_HIGH
         OUTPUT_BASE="BDXXX_TD${T_DUST_BASE}_BS${B_SYNC_BASE}"
     elif [ "$VARY_IDX" -eq 2 ]; then
         VARY_NAME="T_DUST"
-        RANGE=$RANGE_LOW
+        RANGE=$RANGE_HIGH
         OUTPUT_BASE="BD${B_DUST_BASE}_TDXXX_BS${B_SYNC_BASE}"
     elif [ "$VARY_IDX" -eq 3 ]; then
         VARY_NAME="B_SYNC"
-        RANGE=$RANGE_LOW
+        RANGE=$RANGE_HIGH
         OUTPUT_BASE="BD${B_DUST_BASE}_TD${T_DUST_BASE}_BSXXX"
     fi
 
@@ -115,12 +118,13 @@ for config in "${CONFIGS[@]}"; do
         for MASK in GAL020 GAL040 GAL060; do
             NAME="kmeans_${SKY}_BD${B_DUST}_TD${T_DUST}_BS${B_SYNC}_${MASK}"
             if [ ! -f "$RUN_OUTPUT_DIR/$NAME/best_params.npz" ]; then
-                jid=$(submit_job "${JOB_NAME}_${MASK}" "" KMEANS_C1D1S1 \
+                jid=$(submit_job "${JOB_NAME}_${MASK}" "" KMEANS_C1D1S1/KMEANS_C1D1S1_${MASK}_${VARY_NAME}_${VAL} \
                     kmeans-model -n 64 -ns 40 -nr 1.0 \
                     -pc $B_DUST $T_DUST $B_SYNC \
                     -tag ${SKY} -m $MASK -i LiteBIRD \
                     -s $SOLVER -mi 2000 \
                     --rtol $RTOL --atol $ATOL \
+                    --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
                     --name $NAME -o $RUN_OUTPUT_DIR)
                 current_job_ids+=("$jid")
             else
@@ -139,7 +143,7 @@ for config in "${CONFIGS[@]}"; do
     else
         DEP_ARGS=""
     fi
-    submit_job "ANA_${OUTPUT_BASE}" "$DEP_ARGS" ANA_C1D1S1 \
+    submit_job "ANA_${OUTPUT_BASE}" "$DEP_ARGS" KMEANS_C1D1S1/ANA_C1D1S1_${VARY_NAME} \
         r_analysis snap -r "$REGEX" -ird $RUN_OUTPUT_DIR \
         -o $RUN_OUTPUT_DIR/SNAPSHOT/kmeans_c1d1s1.parquet \
         -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD
