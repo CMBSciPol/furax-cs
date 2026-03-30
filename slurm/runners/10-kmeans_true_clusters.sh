@@ -2,13 +2,13 @@
 # RUN_LOCALLY: true (local direct), false (sbatch), dryrun (print only)
 RUN_LOCALLY=false
 
-ACCOUNT="rzt@v100"
-CONSTRAINT="v100-32g"
+ACCOUNT="tkc@h100"
+CONSTRAINT="h100"
 GPUS_PER_NODE=1
 CPUS_PER_NODE=10
 TASKS_PER_NODE=1
 NODES=1
-QOS="qos_gpu-t3"
+QOS="qos_gpu_h100-t3"
 TIME_LIMIT="05:00:00"
 CPUS_PER_TASK=$((CPUS_PER_NODE / TASKS_PER_NODE))
 BASE_SBATCH_ARGS="--account=$ACCOUNT -C $CONSTRAINT --time=$TIME_LIMIT \
@@ -52,34 +52,38 @@ submit_job() {
 # Configuration
 # =============================================================================
 
-RTOL=1e-16
+RTOL=1e-18
 ATOL=1e-18
+COOLDOWN=50
+MIN_STEPS=200
+VERBOSE=true
+[ "$VERBOSE" = true ] && verbose_arg="--verbose" || verbose_arg=""
 
 SKY=c1d1s1
 SOLVER="ADABK0"
-OUTPUT_DIR="RESULTS/KMEANS_TRUE_CLUSTERS"
+SUFFIX="_BETTER_TERMINATE_FINAL"
+OUTPUT_DIR="RESULTS/KMEANS_TRUE_CLUSTERS${SUFFIX}"
 
 # =============================================================================
 # K-Means runs with precomputed true-parameter clusters
 # =============================================================================
 
 job_ids=()
-
-for MASK in GAL020 GAL040 GAL060; do
-    NAME="kmeans_${SKY}_BDtrue_TDtrue_BStrue_${MASK}"
-    if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
-        jid=$(submit_job "KM_TRUE_${MASK}" "" KMEANS_TRUE \
-            kmeans-model -n 64 -ns 40 -nr 1.0 \
-            -c true true true \
-            -tag ${SKY} -m $MASK -i LiteBIRD \
-            -s $SOLVER -mi 2000 \
-            --rtol $RTOL --atol $ATOL \
-            --name $NAME -o $OUTPUT_DIR)
-        job_ids+=("$jid")
-    else
-        echo "Skipping $NAME (already done)"
-    fi
-done
+MASK="ALL-GALACTIC"
+NAME="kmeans_${SKY}_BDtrue_TDtrue_BStrue_${MASK}"
+if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
+    jid=$(submit_job "KM_TRUE_${MASK}${SUFFIX}" "" KMEANS_TRUE${SUFFIX} \
+        kmeans-model -n 64 -ns 40 -nr 1.0 \
+        -c true true true \
+        -tag ${SKY} -m $MASK -i LiteBIRD \
+        -s $SOLVER -mi 2000 \
+        --rtol $RTOL --atol $ATOL \
+        --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
+        --name $NAME -o $OUTPUT_DIR)
+    job_ids+=("$jid")
+else
+    echo "Skipping $NAME (already done)"
+fi
 
 # Snapshot step
 deps=$(IFS=:; echo "${job_ids[*]}")
@@ -88,7 +92,7 @@ if [ -n "$deps" ]; then
 else
     DEP_ARGS=""
 fi
-submit_job "ANA_TRUE" "$DEP_ARGS" ANA_TRUE \
+submit_job "ANA_TRUE${SUFFIX}" "$DEP_ARGS" ANA_TRUE${SUFFIX} \
     r_analysis snap -r "kmeans_${SKY}_BDtrue_TDtrue_BStrue" -ird $OUTPUT_DIR \
     -o $OUTPUT_DIR/SNAPSHOT/kmeans_c1d1s1_true.parquet \
     -mi 2000 -s optax_lbfgs -n 64 -i LiteBIRD

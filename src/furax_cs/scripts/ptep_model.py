@@ -157,19 +157,29 @@ EXAMPLES:
         help="Output directory for results",
     )
     parser.add_argument(
-        "-v",
-        "--use-vmap",
-        action="store_true",
-        help="Use jax.vmap instead of for-loop for noise simulations. "
-        "Only activate this option when using JAX JIT cache (persistent compilation cache) "
-        "to avoid recompilation overhead on each run.",
+        "--vmap-batch",
+        type=int,
+        default=1,
+        help="Number of noise simulations per vmap batch. "
+        "Use 1 to disable vmap and run a serial for-loop of JIT'd single runs.",
     )
     parser.add_argument(
-        "-top_k",
-        "--top-k-release",
-        type=float,
-        default=None,
-        help="Fraction of constraints to release in active set solver (e.g., 0.1 for 10%%).",
+        "--cooldown",
+        type=int,
+        default=20,
+        help="Steps after a constraint release before termination is allowed (active set solvers).",
+    )
+    parser.add_argument(
+        "--min-steps",
+        type=int,
+        default=10,
+        help="Minimum iterations before termination is considered (active set solvers).",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose debug printing for active set solvers.",
     )
     parser.add_argument(
         "--name",
@@ -200,9 +210,10 @@ def main():
         out_folder = f"{args.output}/{args.name}"
     else:
         ud_grades = f"BD{int(args.target_ud_grade[0])}_TD{int(args.target_ud_grade[1])}_BS{int(args.target_ud_grade[2])}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
-        config = f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
-        if args.top_k_release is not None:
-            config += f"_topk{args.top_k_release}"
+        config = (
+            f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
+            f"_cd{args.cooldown}_ms{args.min_steps}"
+        )
         out_folder = f"{args.output}/ptep_{args.tag}_{ud_grades}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
 
     # Set up parameters
@@ -270,9 +281,11 @@ def main():
     lower_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), lower_bound, max_count)
     upper_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), upper_bound, max_count)
 
-    solver_options = {}
-    if args.top_k_release is not None:
-        solver_options["max_constraints_to_release"] = args.top_k_release
+    options = {
+        "verbose_print": args.verbose,
+        "cooldown": args.cooldown,
+        "min_steps": args.min_steps,
+    }
 
     def single_run(noise_id):
         key = jax.random.PRNGKey(noise_id)
@@ -290,7 +303,7 @@ def main():
             lower_bound=lower_bound_tree,
             upper_bound=upper_bound_tree,
             precondition=args.cond,
-            solver_options=solver_options,
+            options=options,
             nu=nu,
             N=N,
             d=noised_d,
@@ -323,19 +336,30 @@ def main():
     # Save results and mask
     if not args.best_only:
         start_time = perf_counter()
-        if args.use_vmap:
-            # Vmap approach - JIT the entire vmapped computation
-            results = jax.jit(jax.vmap(single_run))(
-                jnp.arange(args.seed_start, args.seed_start + nb_noise_sim)
-            )
-        else:
-            # For-loop approach - JIT single_run only
+        if args.vmap_batch == 1:
+            # Serial for-loop: JIT a single run at a time
             single_run_jit = jax.jit(single_run)
-            results_list = tqdm(
-                [single_run_jit(i) for i in range(args.seed_start, args.seed_start + nb_noise_sim)],
-                desc="Running noise simulations",
+            results_list = list(
+                tqdm(
+                    [
+                        single_run_jit(i)
+                        for i in range(args.seed_start, args.seed_start + nb_noise_sim)
+                    ],
+                    desc="Running noise simulations",
+                )
             )
             results = jax.tree.map(lambda *xs: jnp.stack(xs), *results_list)
+        else:
+            # Batched vmap: for-loop of JIT'd vmaps, each processing vmap_batch sims
+            vmapped_run_jit = jax.jit(jax.vmap(single_run))
+            seeds = list(range(args.seed_start, args.seed_start + nb_noise_sim))
+            batches = []
+            for i in tqdm(
+                range(0, nb_noise_sim, args.vmap_batch), desc="Running noise simulations"
+            ):
+                batch_seeds = jnp.array(seeds[i : i + args.vmap_batch])
+                batches.append(vmapped_run_jit(batch_seeds))
+            results = jax.tree.map(lambda *xs: jnp.concatenate(xs, axis=0), *batches)
         jax.tree.map(lambda x: x.block_until_ready(), results)
         end_time = perf_counter()
         min_bd, max_bd = results["beta_dust"].min(), results["beta_dust"].max()

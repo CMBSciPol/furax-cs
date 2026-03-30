@@ -24,6 +24,7 @@ def plot_all_cl_residuals(
     figsize: tuple[float, float] | None = None,
     r_range: tuple[float, float] | None = None,
     r_plot: tuple[float, float] | None = None,
+    transparent: bool = True,
 ) -> None:
     """Overlay residual BB spectra with a simple legend for line styles only."""
 
@@ -113,8 +114,15 @@ def plot_all_cl_residuals(
                     linewidth=linewidth,
                     label=None,
                 )
+        FURAX_CS_ALLOW_FULLSKY = any("r=3e-3" in name for name in names)
+        if FURAX_CS_ALLOW_FULLSKY:
+            # label should be cl_obs
+            plt.plot([], [], color="black", linestyle="--", label=r"$C_\ell^{\mathrm{obs}}$")
+        else:
+            plt.plot(
+                [], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)"
+            )
 
-        plt.plot([], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)")
         plt.plot(
             [], [], color="black", linestyle="-", label=r"Systematic ($C_\ell^{\mathrm{syst}}$)"
         )
@@ -141,7 +149,12 @@ def plot_all_cl_residuals(
         plt.tight_layout()
 
         file_suffix = group_name if group_name else "_".join(names)
-        save_or_show(f"bb_spectra_{file_suffix}", output_format, output_dir=output_dir)
+        save_or_show(
+            f"bb_spectra_{file_suffix}",
+            output_format,
+            output_dir=output_dir,
+            transparent=transparent,
+        )
 
 
 def plot_all_histograms(
@@ -152,6 +165,7 @@ def plot_all_histograms(
     output_dir: str = "plots",
     group_name: str | None = None,
     colors: list[str] | None = None,
+    transparent: bool = True,
 ) -> None:
     """Generate histograms of parameters comparing Truth vs Recovered across runs."""
 
@@ -239,6 +253,7 @@ def plot_all_histograms(
         f"minimize_histograms_{file_suffix}",
         output_format,
         output_dir=output_dir,
+        transparent=transparent,
     )
 
 
@@ -253,6 +268,7 @@ def plot_all_r_estimation(
     legend_anchor: tuple[float, float] | None = None,
     figsize: tuple[float, float] | None = None,
     r_plot: tuple[float, float] | None = None,
+    transparent: bool = True,
 ) -> None:
     """Compare r likelihood curves across runs in a single figure."""
 
@@ -336,4 +352,9 @@ def plot_all_r_estimation(
         plt.tight_layout()
 
         file_suffix = group_name if group_name else "_".join(names)
-        save_or_show(f"r_likelihood_{file_suffix}", output_format, output_dir=output_dir)
+        save_or_show(
+            f"r_likelihood_{file_suffix}",
+            output_format,
+            output_dir=output_dir,
+            transparent=transparent,
+        )

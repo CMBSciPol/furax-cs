@@ -46,7 +46,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         - needs_r_estimation: bool
         - need_patch_maps: bool
         - compute_syst: bool
-        - compute_stat: bool
         - compute_total: bool
     """
     if snapshot_mode:
@@ -56,7 +55,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
             "needs_r_estimation": True,
             "need_patch_maps": True,
             "compute_syst": True,
-            "compute_stat": True,
             "compute_total": True,
         }
 
@@ -98,7 +96,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         or plot_all_histograms
     )
     compute_syst = needs_residual_spectra or needs_residual_maps
-    compute_stat = compute_syst or needs_r_estimation
     compute_total = needs_r_estimation
 
     return {
@@ -107,7 +104,6 @@ def get_compute_flags(args: argparse.Namespace, snapshot_mode: bool = False) -> 
         "needs_r_estimation": needs_r_estimation,
         "need_patch_maps": need_patch_maps,
         "compute_syst": compute_syst,
-        "compute_stat": compute_stat,
         "compute_total": compute_total,
     }
 
@@ -308,9 +304,7 @@ def compute_group(
         "beta_pl_patches": 0,
     }
 
-    info(
-        format_residual_flags(flags["compute_syst"], flags["compute_stat"], flags["compute_total"])
-    )
+    info(format_residual_flags(flags["compute_syst"], flags["compute_total"]))
 
     for folder in tqdm(folders, desc=f"  Folders for {title}", leave=False, unit="folder"):
         # Load results once per folder
@@ -425,22 +419,32 @@ def compute_group(
         cl_syst_res, syst_map = compute_systematic_res(wd, f_sky, ell_range)
         info(f"Systematic residuals: min={np.min(cl_syst_res):.2e}, max={np.max(cl_syst_res):.2e}")
 
-    if flags["compute_stat"] and flags["compute_syst"] and syst_map is not None:
-        cl_stat_res, stat_maps = compute_statistical_res(
-            combined_cmb_recon, s_true, f_sky, ell_range, syst_map
-        )
-        info(f"Statistical residuals: min={np.min(cl_stat_res):.2e}, max={np.max(cl_stat_res):.2e}")
-
-    cl_total_res = None
     is_full_sky = f_sky >= 0.999 and os.environ.get("FURAX_CS_ALLOW_FULLSKY", "0") == "1"
     info(f"Effective f_sky: {f_sky:.4f} (Full sky: {is_full_sky})")
 
+    cl_total_res = None
+    total_maps = None
     if flags["compute_total"]:
-        if not is_full_sky and cl_syst_res is not None and cl_stat_res is not None:
-            cl_total_res = cl_syst_res + cl_stat_res
-        else:
-            cl_total_res, _ = compute_total_res(combined_cmb_recon, s_true, f_sky, ell_range)
+        cl_total_res, total_maps = compute_total_res(combined_cmb_recon, s_true, f_sky, ell_range)
         info(f"Total residuals: min={np.min(cl_total_res):.2e}, max={np.max(cl_total_res):.2e}")
+
+    use_classic_stat = os.environ.get("FURAX_CS_CLASSIC_STAT", "1") == "1"
+    if use_classic_stat and syst_map is not None:
+        hint("Will compute statistical residuals directly")
+        cl_stat_res, stat_maps = compute_statistical_res(
+            combined_cmb_recon, s_true, f_sky, ell_range, syst_map
+        )
+        info(
+            f"Statistical residuals (classic): min={np.min(cl_stat_res):.2e}, max={np.max(cl_stat_res):.2e}"
+        )
+    elif cl_total_res is not None and cl_syst_res is not None:
+        hint("Will compute statistical residuals from total and systematic residuals")
+        assert (
+            syst_map is not None and total_maps is not None
+        ), "syst_map must be available to compute stat_maps from total and systematic residuals"
+        cl_stat_res = cl_total_res - cl_syst_res
+        stat_maps = total_maps - syst_map[np.newaxis]
+        info(f"Statistical residuals: min={np.min(cl_stat_res):.2e}, max={np.max(cl_stat_res):.2e}")
 
     # True Cl
     cl_true = compute_cl_true_bb(s_true, ell_range)
@@ -462,7 +466,9 @@ def compute_group(
     cl_bb_obs, cl_bb_r1, cl_bb_lens = None, None, None
     if flags["compute_total"] and flags["needs_r_estimation"] and cl_total_res is not None:
         cl_for_r = cl_total_res
-        noise_for_r = cl_stat_res if cl_stat_res is not None else np.zeros_like(ell_range)
+        noise_for_r = (
+            np.maximum(cl_stat_res, 0) if cl_stat_res is not None else np.zeros_like(ell_range)
+        )
         (
             r_best,
             sigma_r_neg,

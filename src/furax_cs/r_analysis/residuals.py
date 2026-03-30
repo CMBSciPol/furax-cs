@@ -13,6 +13,7 @@ from jaxtyping import (
 )
 from tqdm import tqdm
 
+from ..logging_utils import info, warning
 from .utils import expand_stokes
 
 
@@ -83,8 +84,17 @@ def compute_statistical_res(
     res_stat = np.where(res == hp.UNSEEN, hp.UNSEEN, res - s_syst_arr[np.newaxis, ...])
 
     cl_list = []
-    for i in tqdm(range(res_stat.shape[0]), desc="Computing Statistical BB Spectra"):
+    # for i in tqdm(range(res_stat.shape[0]), desc="Computing Statistical BB Spectra"):
+    for i in range(res_stat.shape[0]):
         cl = cast(Float[Array, " 6 L"], hp.anafast(res_stat[i]))
+        if max(cl[2][ell_range]) > 6e-6:
+            warning(
+                f"Realization {i}: min BB={cl[2][ell_range].min():.2e}, max BB={cl[2][ell_range].max():.2e}"
+            )
+        else:
+            info(
+                f"Realization {i}: min BB={cl[2][ell_range].min():.2e}, max BB={cl[2][ell_range].max():.2e}"
+            )
         cl_list.append(cl[2][ell_range])
 
     cl_mean = np.mean(cl_list, axis=0) / fsky
@@ -122,9 +132,13 @@ def compute_total_res(
     else:
         res = np.where(s_hat_arr == hp.UNSEEN, hp.UNSEEN, s_hat_arr - s_true[np.newaxis, ...])
 
+    filter_bad_res = os.environ.get("FURAX_CS_FILTER_BAD_RES", "0") == "1"
+
     cl_list = []
     for i in tqdm(range(res.shape[0]), desc="Computing Residual BB Spectra"):
         cl = cast(Float[Array, " 6 L"], hp.anafast(res[i]))
+        if filter_bad_res == 1 and cl[2][ell_range].max() > 1e-5:
+            continue
         cl_list.append(cl[2][ell_range])
 
     cl_mean = np.mean(cl_list, axis=0) / fsky
