@@ -220,8 +220,20 @@ def minimize(
         Box constraints.
     precondition : bool
         Whether to apply parameter transformation and output scaling.
-    solver_options : dict, optional
-        Additional arguments passed to the solver factory (get_solver).
+    options : dict, optional
+        Extra arguments passed to the solver factory (get_solver).
+        For active-set solvers (``ADABK{N}`` family) the recognised keys are:
+
+        * ``cooldown`` (int, default 20) — steps to suppress termination
+          after a constraint release.
+        * ``min_steps`` (int, default 10) — minimum iterations before
+          termination is considered.
+        * ``verbose_print`` (bool, default False) — print per-step debug
+          info via ``jax.debug.print`` (JIT-compatible).
+        * ``max_linesearch_steps`` (int, default 50) — maximum line-search
+          steps per iteration (active-set and ``optax_lbfgs`` solvers).
+        * ``linesearch`` (str) — linesearch variant for ``optax_lbfgs``
+          (``"zoom"`` or ``"backtracking"``).
     **fn_kwargs
         Additional arguments passed to fn.
 
