@@ -498,8 +498,12 @@ def main():
         "beta_pl_patches": max_count["beta_pl"],
     }
 
-    solver_options = {"linesearch": args.linesearch, "verbose_print": args.verbose}
-    options = {"cooldown": args.cooldown, "min_steps": args.min_steps}
+    options = {
+        "linesearch": args.linesearch,
+        "verbose_print": args.verbose,
+        "cooldown": args.cooldown,
+        "min_steps": args.min_steps,
+    }
 
     def compute_minimum_variance(
         T_d_patches: int,
@@ -563,7 +567,6 @@ def main():
                 lower_bound=lower_bound_tree,
                 upper_bound=upper_bound_tree,
                 precondition=args.cond,
-                solver_options=solver_options,
                 options=options,
                 nu=nu,
                 N=N,

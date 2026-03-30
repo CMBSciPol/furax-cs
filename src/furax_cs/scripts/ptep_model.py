@@ -281,8 +281,11 @@ def main():
     lower_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), lower_bound, max_count)
     upper_bound_tree = jax.tree.map(lambda v, c: jnp.full((c,), v), upper_bound, max_count)
 
-    solver_options = {"verbose_print": args.verbose}
-    options = {"cooldown": args.cooldown, "min_steps": args.min_steps}
+    options = {
+        "verbose_print": args.verbose,
+        "cooldown": args.cooldown,
+        "min_steps": args.min_steps,
+    }
 
     def single_run(noise_id):
         key = jax.random.PRNGKey(noise_id)
@@ -300,7 +303,6 @@ def main():
             lower_bound=lower_bound_tree,
             upper_bound=upper_bound_tree,
             precondition=args.cond,
-            solver_options=solver_options,
             options=options,
             nu=nu,
             N=N,

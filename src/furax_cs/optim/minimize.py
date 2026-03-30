@@ -256,6 +256,7 @@ def minimize(
     _opts = options or {}
     cooldown = _opts.get("cooldown", 20)
     min_steps = _opts.get("min_steps", 10)
+    solver_kwargs = {k: v for k, v in _opts.items() if k not in ("cooldown", "min_steps")}
     solver, solver_type = get_solver(
         solver_name,
         rtol=rtol,
@@ -264,7 +265,7 @@ def minimize(
         upper=upper_bound,
         cooldown=cooldown,
         min_steps=min_steps,
-        **solver_opts,
+        **solver_kwargs,
     )
 
     if solver_type == "optimistix":
