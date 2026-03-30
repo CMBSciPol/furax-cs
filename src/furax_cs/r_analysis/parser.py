@@ -287,6 +287,12 @@ ARGUMENT NOTES:
         help="Font size for plots",
     )
     parser_plot.add_argument(
+        "--transparent",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Save figures with transparent background (default: True). Use --no-transparent to disable.",
+    )
+    parser_plot.add_argument(
         "--color",
         type=str,
         nargs="*",
