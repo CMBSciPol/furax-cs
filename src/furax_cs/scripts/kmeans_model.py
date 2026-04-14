@@ -123,6 +123,7 @@ def load_patches_from_file(path: str, indices: Array) -> tuple[Array, int]:
     masked = full_sky[indices].astype(jnp.int64)
     n_clusters = int(jnp.unique(masked).size)
     normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
+    normalized = masked.astype(jnp.int64)
     return normalized, n_clusters
 
 
