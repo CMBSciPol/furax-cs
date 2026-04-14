@@ -415,37 +415,6 @@ def plot_single_file_grouped(
                 for i, (group_label, _names, kw_to_plot) in enumerate(all_groups):
                     points = _extract_r_vs_clusters_points(patch_key, kw_to_plot)
                     xs, ys = zip(*points)
-                    # =================================================================================
-                    # INJECTIONS TO BE DELETED
-                    # =================================================================================
-
-                    if group_label.startswith("Synthetic with"):
-                        xs = np.array(xs)
-                        ymax, ymin = 1.05e-04, 8.51e-05
-
-                        # 1. Calculate your clean, baseline line
-                        truth = 100
-                        baseline_ys = jnp.where(
-                            xs < truth,
-                            ymax - (ymax - ymin) * (xs / 100),
-                            ymin + (ymax - ymin) * ((xs - 100) / 200),
-                        )
-
-                        # 2. Define the noise envelope (distance from the minimum)
-                        # At xs = 100, this becomes 0.
-                        diff_from_min = baseline_ys - ymin
-
-                        # 3. Create the noise
-                        noise_level = (
-                            0.05  # 5% noise. Adjust this up or down for more/less realism.
-                        )
-                        random_noise = np.random.uniform(-1, 1, size=xs.shape)
-
-                        # 4. Apply the noise to the baseline
-                        ys = baseline_ys + (noise_level * diff_from_min * random_noise)
-                    # =================================================================================
-                    # END OF INJECTIONS
-                    # =================================================================================
                     ys_arr = np.asarray(ys, dtype=float)
                     min_idx = int(np.argmin(ys_arr))
                     min_x = int(xs[min_idx])
