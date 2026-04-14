@@ -20,11 +20,11 @@ def plot_params(
     params: dict[str, Float[Array, " npix"]],
     output_format: str,
     output_dir: str = "plots",
-    plot_vertical: bool = True,
     subfolder: str | None = None,
     transparent: bool = True,
 ) -> None:
     """Plot recovered spectral parameter maps for a single configuration."""
+    plot_vertical = os.environ.get("FURAX_CS_PLOT_VERTICAL", "0") == "1"
     if plot_vertical:
         fig_size = (8, 16)
         subplot_args = (3, 1, lambda i: i + 1)
@@ -70,11 +70,11 @@ def plot_patches(
     patches: dict[str, Int[Array, " npix"]],
     output_format: str,
     output_dir: str = "plots",
-    plot_vertical: bool = False,
     subfolder: str | None = None,
     transparent: bool = True,
 ) -> None:
     """Visualise patch assignments (cluster labels) for each spectral parameter."""
+    plot_vertical = os.environ.get("FURAX_CS_PLOT_VERTICAL", "0") == "1"
     if plot_vertical:
         fig_size = (8, 16)
         subplot_args = (3, 1, lambda i: i + 1)
@@ -416,7 +416,11 @@ def plot_r_estimator(
     if xlim:
         plt.xlim(*xlim)
 
-    legend_kwargs: dict = {"frameon": True, "framealpha": 0.95, "fontsize": 10}
+    legend_kwargs: dict = {
+        "frameon": True,
+        "framealpha": 0.95,
+        "fontsize": plt.rcParams["font.size"] * 0.7,
+    }
     if legend_anchor is not None:
         legend_kwargs["bbox_to_anchor"] = tuple(legend_anchor)
         legend_kwargs["loc"] = "upper left"

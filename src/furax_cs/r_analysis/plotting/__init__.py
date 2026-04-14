@@ -14,7 +14,6 @@ import numpy as np
 import scienceplots  # noqa: F401 # pyright: ignore[reportUnusedImport]
 from furax.obs.stokes import Stokes
 from jaxtyping import Array, Float
-from tqdm.auto import tqdm
 
 from ...logging_utils import warning
 from ..snapshot import CompSepResult, _result_to_plot_dict
@@ -125,7 +124,7 @@ def save_or_show(
     output_format: str,
     output_dir: str = "plots",
     subfolder: str | None = None,
-    transparent: bool = True,
+    transparent: bool = False,
 ) -> None:
     """Save figure to file or show inline based on output format."""
     from ...logging_utils import success
@@ -412,6 +411,8 @@ def plot_aggregate_results(
     r_range: tuple[float, float] | None = None,
     r_plot: tuple[float, float] | None = None,
     transparent: bool = True,
+    cl_obs_label: bool = False,
+    no_tot_residuals: bool = False,
 ) -> None:
     from .group import plot_all_cl_residuals, plot_all_histograms, plot_all_r_estimation
     from .single import plot_variance_vs_r
@@ -484,6 +485,8 @@ def plot_aggregate_results(
             r_range=r_range,
             r_plot=r_plot,
             transparent=transparent,
+            cl_obs_label=cl_obs_label,
+            no_tot_residuals=no_tot_residuals,
         )
         plt.close("all")
 
@@ -508,7 +511,9 @@ def plot_aggregate_results(
 # Top-level orchestrator
 # ---------------------------------------------------------------------------
 def run_grouped_plot(
-    groups: list[tuple[str, Any]],
+    ds: Any,
+    runs_patterns: list[str] | None,
+    groups_patterns: list[str] | None,
     indiv_flags: dict[str, bool],
     aggregate_flags: dict[str, bool],
     output_format: str,
@@ -525,6 +530,8 @@ def run_grouped_plot(
     r_range: tuple[float, float] | None = None,
     r_plot: tuple[float, float] | None = None,
     transparent: bool = True,
+    cl_obs_label: bool = False,
+    no_tot_residuals: bool = False,
 ) -> int:
     """Run plots with one group per `-g` pattern."""
     from .single import plot_single_file_grouped
@@ -542,22 +549,64 @@ def run_grouped_plot(
     single_flags = {k: aggregate_flags.get(k, False) for k in SINGLE_FILE_AGGREGATE_PLOTS}
 
     all_groups_collected: list[tuple[str, list[str], dict[str, Any]]] = []
-    row_idx = 0
 
-    for idx, (pattern, group_ds) in enumerate(groups):
-        group_label = group_titles[idx] if (group_titles and idx < len(group_titles)) else pattern
-        safe = re.sub(r"[^\w\-]", "_", group_label).strip("_")
-        group_dir = os.path.join(output_dir, safe)
+    # 1. Setup groups
+    groups_data = []
+    if groups_patterns:
+        for idx, pattern in enumerate(groups_patterns):
+            group_label = (
+                group_titles[idx] if (group_titles and idx < len(group_titles)) else pattern
+            )
+            safe = re.sub(r"[^\w\-]", "_", group_label).strip("_")
+            group_dir = os.path.join(output_dir, safe)
+            if output_format != "show":
+                os.makedirs(group_dir, exist_ok=True)
+            groups_data.append(
+                {"pattern": pattern, "label": group_label, "dir": group_dir, "rows": []}
+            )
+    else:
+        group_dir = os.path.join(output_dir, "ALL")
         if output_format != "show":
             os.makedirs(group_dir, exist_ok=True)
+        groups_data.append({"pattern": ".*", "label": "ALL", "dir": group_dir, "rows": []})
 
-        seen_in_group: set[str] = set()
-        deduped_rows: list[Any] = []
-        for row in group_ds:
-            k = str(row["kw"])
-            if k not in seen_in_group:
-                seen_in_group.add(k)
-                deduped_rows.append(row)
+    # 2. Iterate dataset once
+    seen_in_group: set[str] = set()
+    from tqdm import tqdm
+
+    for row in tqdm(ds, desc="Filtering and grouping dataset"):
+        name = str(row.get("name", row.get("kw", "")))
+
+        if runs_patterns and not any(re.search(pat, name) for pat in runs_patterns):
+            continue
+
+        for gdata in groups_data:
+            if re.search(gdata["pattern"], name):
+                k = str(row["kw"])
+                group_key = f"{gdata['label']}_{k}"
+                if group_key not in seen_in_group:
+                    seen_in_group.add(group_key)
+                    gdata["rows"].append(row)
+
+    # 3. Sort runs within groups based on runs_patterns order if given
+    if runs_patterns:
+
+        def _pattern_order(row):
+            name = str(row.get("name", row.get("kw", "")))
+            for i, pat in enumerate(runs_patterns):
+                if re.search(pat, name):
+                    return i
+            return len(runs_patterns)
+
+        for gdata in groups_data:
+            gdata["rows"].sort(key=_pattern_order)
+
+    # 4. Plot each group
+    row_idx = 0
+    for gdata in groups_data:
+        group_label = gdata["label"]
+        group_dir = gdata["dir"]
+        deduped_rows = gdata["rows"]
 
         names: list[str] = []
         kw_to_plot: dict[str, Any] = {}
@@ -607,6 +656,8 @@ def run_grouped_plot(
             r_range=r_range,
             r_plot=r_plot,
             transparent=transparent,
+            cl_obs_label=cl_obs_label,
+            no_tot_residuals=no_tot_residuals,
         )
         all_groups_collected.append((group_label, names, kw_to_plot))
 

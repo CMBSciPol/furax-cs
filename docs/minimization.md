@@ -1,6 +1,8 @@
 # Minimization Solvers
 
-`furax-cs` provides a unified interface for various minimization solvers, including wrappers for **Optax**, **Optimistix**, and **SciPy**.
+`furax-cs` exposes a unified interface for various minimization solvers via the
+[**CADRE**](https://github.com/CMBSciPol/CADRE) package (Constraint-Aware Descent Routine Executor),
+which provides the underlying implementations for **Optax**, **Optimistix**, and **SciPy** solvers.
 
 ## Available Solvers
 
@@ -161,7 +163,7 @@ All other solvers (`optax_lbfgs`, `adam`, `optimistix_*`, etc.) benefit from ext
 
 ### Single Run
 ```python
-from furax_cs import minimize
+from cadre import minimize
 
 final_params, state = minimize(
     fn=my_loss_fn,
@@ -183,7 +185,7 @@ Here is an example of running the same optimization problem with multiple solver
 import jax
 import jax.numpy as jnp
 import optimistix as optx
-from furax_cs.optim.solvers import get_solver
+from cadre.solvers import get_solver
 from functools import partial
 
 # Define a simple quadratic loss function

@@ -18,12 +18,15 @@
 
 ## Optimization
 
+Optimization is provided by the [CADRE](https://github.com/CMBSciPol/CADRE) package.
+See the [minimization docs](../minimization.md) for full solver reference.
+
 ```{eval-rst}
-.. autofunction:: furax_cs.optim.minimize.minimize
+.. autofunction:: cadre.minimize.minimize
 ```
 
 ```{eval-rst}
-.. autofunction:: furax_cs.optim.solvers.get_solver
+.. autofunction:: cadre.solvers.get_solver
 ```
 
 ## Binning

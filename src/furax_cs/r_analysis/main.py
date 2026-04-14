@@ -1,5 +1,3 @@
-import re
-
 import datasets
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
@@ -82,6 +80,7 @@ def run_analysis() -> int | None:
             output_dir=args.output_dir,
             bin_config=bin_config,
             noise_selection=args.noise_selection,
+            fwhm_deg=args.fwhm,
         )
 
     # run_grep only needed for snap/validate subcommands
@@ -145,50 +144,16 @@ def run_analysis() -> int | None:
 
         data_files = [str(p) for p in all_parquets]
 
-        # Use pyarrow unified schema to handle parquets with different columns
-        # (e.g. older parquets missing fg_nocmb_q/u added for binning support)
-        import pyarrow as pa
-        import pyarrow.dataset as pads
-        import pyarrow.parquet as pq
-
-        pa_schemas = [pq.read_schema(f) for f in data_files]
-        unified_schema = pa.unify_schemas(pa_schemas)
-        pa_table = pads.dataset(data_files, format="parquet", schema=unified_schema).to_table()
-        ds = datasets.Dataset(pa_table).with_format("numpy")
-
-        if args.runs:
-            patterns = args.runs
-            ds = ds.filter(
-                lambda x: any(re.search(pat, str(x.get("name", x["kw"]))) for pat in patterns)
-            )
-
-            # Reorder rows to match -r pattern order (so -t titles align correctly)
-            def _pattern_order(row):
-                name = str(row.get("name", row["kw"]))
-                for i, pat in enumerate(patterns):
-                    if re.search(pat, name):
-                        return i
-                return len(patterns)
-
-            order = [_pattern_order(ds[i]) for i in range(len(ds))]
-            ds = ds.select(sorted(range(len(ds)), key=lambda i: order[i]))
+        ds = datasets.load_dataset(
+            "parquet", data_files=data_files, split="train", streaming=True
+        ).with_format("numpy")
 
         indiv_flags, aggregate_flags = get_plot_flags(args)
 
-        # Build groups: if -g not given, one implicit group covering all filtered rows
-        if args.groups:
-            groups = [
-                (
-                    pattern,
-                    ds.filter(lambda x, p=pattern: bool(re.search(p, str(x.get("name", x["kw"]))))),
-                )
-                for pattern in args.groups
-            ]
-        else:
-            groups = [(".*", ds)]
-
         return run_grouped_plot(
-            groups,
+            ds,
+            args.runs,
+            args.groups,
             indiv_flags,
             aggregate_flags,
             args.output_format,
@@ -205,6 +170,8 @@ def run_analysis() -> int | None:
             r_range=args.r_range,
             r_plot=args.r_plot,
             transparent=args.transparent,
+            cl_obs_label=args.cl_obs_label,
+            no_tot_residuals=args.no_tot_residuals,
         )
 
     if args.subcommand == "validate":
