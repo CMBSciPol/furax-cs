@@ -17,8 +17,7 @@ dependencies = [
   "pysm3",
   "astropy",
   "optimistix",
-  "cobyqa",
-  "jaxopt",
+  "jax-cadre",
   "scienceplots"
 ]
 description = "GPU Powered CMB Parametric Component Seperation using Furax and JAX"
@@ -30,7 +29,7 @@ version = "0.1.1"
 
 [project.optional-dependencies]
 all = [
-  "furax-cs[plotting,dev,benchmarks,io,docs]"
+  "furax-cs[plotting,dev,benchmarks,io,docs,scipy]"
 ]
 benchmarks = ["jax-hpc-profiler>=v0.3.2"]
 dev = [
@@ -52,6 +51,9 @@ plotting = [
   "matplotlib",
   "seaborn",
   "scienceplots"
+]
+scipy = [
+  "jax-cadre[scipy]"
 ]
 
 [project.scripts]
