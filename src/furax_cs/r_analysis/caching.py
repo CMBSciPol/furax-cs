@@ -5,10 +5,10 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import numpy as np
+from cadre import minimize
 from furax import HomothetyOperator
 from furax.obs import negative_log_likelihood, sky_signal
 from furax.obs.stokes import Stokes
-from furax_cs.optim import minimize
 from jaxtyping import Array, Float, Int
 
 

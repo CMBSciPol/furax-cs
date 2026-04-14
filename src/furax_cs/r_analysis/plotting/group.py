@@ -10,8 +10,6 @@ from jaxtyping import Array, Float
 from ...logging_utils import debug, warning
 from . import get_run_color, save_or_show
 
-font_size = 22
-
 
 def plot_all_cl_residuals(
     names: list[str],
@@ -25,14 +23,17 @@ def plot_all_cl_residuals(
     r_range: tuple[float, float] | None = None,
     r_plot: tuple[float, float] | None = None,
     transparent: bool = True,
+    cl_obs_label: bool = False,
+    no_tot_residuals: bool = False,
 ) -> None:
     """Overlay residual BB spectra with a simple legend for line styles only."""
 
+    _fs = plt.rcParams["font.size"]
     rc_overrides = {
-        "legend.fontsize": font_size * 0.55,
-        "xtick.labelsize": font_size,
-        "ytick.labelsize": font_size,
-        "axes.labelsize": font_size,
+        "legend.fontsize": _fs * 0.7,
+        "xtick.labelsize": _fs,
+        "ytick.labelsize": _fs,
+        "axes.labelsize": _fs,
     }
 
     with plt.rc_context(rc_overrides):
@@ -92,9 +93,16 @@ def plot_all_cl_residuals(
             color = get_run_color(i, colors)
             linewidth = 1.5
 
-            if cl_pytree["cl_total_res"] is not None:
+            if cl_pytree["cl_total_res"] is not None and not no_tot_residuals:
                 plt.plot(
-                    ell_range, cl_pytree["cl_total_res"], color=color, linestyle="--", label=None
+                    ell_range,
+                    cl_pytree["cl_total_res"],
+                    color=color,
+                    linestyle="--",
+                    marker="o",
+                    markersize=3,
+                    markevery=5,
+                    label=None,
                 )
             if cl_pytree["cl_syst_res"] is not None:
                 plt.plot(
@@ -111,17 +119,30 @@ def plot_all_cl_residuals(
                     cl_pytree["cl_stat_res"],
                     color=color,
                     linestyle=":",
-                    linewidth=linewidth,
+                    linewidth=linewidth * 1.3,
                     label=None,
                 )
-        FURAX_CS_ALLOW_FULLSKY = any("r=3e-3" in name for name in names)
-        if FURAX_CS_ALLOW_FULLSKY:
-            # label should be cl_obs
-            plt.plot([], [], color="black", linestyle="--", label=r"$C_\ell^{\mathrm{obs}}$")
-        else:
-            plt.plot(
-                [], [], color="black", linestyle="--", label=r"Total ($C_\ell^{\mathrm{res}}$)"
-            )
+        if not no_tot_residuals:
+            if cl_obs_label:
+                plt.plot(
+                    [],
+                    [],
+                    color="black",
+                    linestyle="--",
+                    marker="o",
+                    markersize=3,
+                    label=r"$C_\ell^{\mathrm{obs}}$",
+                )
+            else:
+                plt.plot(
+                    [],
+                    [],
+                    color="black",
+                    linestyle="--",
+                    marker="o",
+                    markersize=3,
+                    label=r"Total ($C_\ell^{\mathrm{res}}$)",
+                )
 
         plt.plot(
             [], [], color="black", linestyle="-", label=r"Systematic ($C_\ell^{\mathrm{syst}}$)"
@@ -272,13 +293,14 @@ def plot_all_r_estimation(
 ) -> None:
     """Compare r likelihood curves across runs in a single figure."""
 
+    _fs = plt.rcParams["font.size"]
     rc_overrides = {
-        "font.size": font_size,
-        "axes.labelsize": font_size,
-        "xtick.labelsize": font_size,
-        "ytick.labelsize": font_size,
-        "legend.fontsize": font_size * 0.7,
-        "axes.titlesize": font_size,
+        "font.size": _fs,
+        "axes.labelsize": _fs,
+        "xtick.labelsize": _fs,
+        "ytick.labelsize": _fs,
+        "legend.fontsize": _fs * 0.8,
+        "axes.titlesize": _fs,
     }
 
     with plt.rc_context(rc_overrides):

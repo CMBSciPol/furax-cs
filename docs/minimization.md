@@ -1,6 +1,8 @@
 # Minimization Solvers
 
-`furax-cs` provides a unified interface for various minimization solvers, including wrappers for **Optax**, **Optimistix**, and **SciPy**.
+`furax-cs` exposes a unified interface for various minimization solvers via the
+[**CADRE**](https://github.com/CMBSciPol/CADRE) package (Constraint-Aware Descent Routine Executor),
+which provides the underlying implementations for **Optax**, **Optimistix**, and **SciPy** solvers.
 
 ## Available Solvers
 
@@ -95,6 +97,50 @@ This prevents numerical under/overflow across the extreme dynamic range between 
 
 The step size α is capped at the distance to the nearest bound (α_max), then a line search finds the optimal α in [0, α_max]. If a parameter hits a bound, it becomes an active constraint.
 
+## Termination Control (ADABK solvers)
+
+Four parameters control when ADABK solvers decide to stop. Pass them via the `options` dict of `minimize()`:
+
+```python
+final_params, state = minimize(
+    fn=my_loss_fn,
+    init_params=params,
+    solver_name="ADABK0",
+    lower_bound=lower,
+    upper_bound=upper,
+    options={
+        "cooldown": 50,              # default: 20
+        "min_steps": 200,            # default: 10
+        "verbose_print": True,       # default: False
+        "max_linesearch_steps": 100, # default: 50
+    },
+)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `cooldown` | `20` | Steps to suppress termination after a constraint is released. Prevents premature convergence caused by a transient function spike when a bound constraint opens. |
+| `min_steps` | `10` | Minimum iterations before termination is ever considered. Useful when the initial gradient is near zero but the landscape is not yet explored. |
+| `verbose_print` | `False` | Print per-step diagnostics: current `f`, `f_diff`, `best_f`, cooldown status, and termination decision. Uses `jax.debug.print` so it is JIT-compatible. |
+| `max_linesearch_steps` | `50` | Maximum bounded line-search steps per iteration. |
+
+### How termination is decided
+
+Termination requires **all** of the following to hold simultaneously:
+
+1. `f_diff = |f_current − f_prev| < atol + rtol × max(1, |best_f|)` — spike-immune f-change check
+2. Cauchy-convergence in y-space (base Optimistix check)
+3. Step count ≥ `min_steps`
+4. Not inside the cooldown window after the last constraint release
+
+### CLI equivalents
+
+When using `kmeans-model` or `ptep-model`, the same parameters are available as flags:
+
+```bash
+kmeans-model ... --cooldown 50 --min-steps 200 --verbose
+```
+
 ## Conditioning
 
 Conditioning (preconditioning) transforms the optimization problem to improve convergence. It applies two transformations before optimization:
@@ -117,7 +163,7 @@ All other solvers (`optax_lbfgs`, `adam`, `optimistix_*`, etc.) benefit from ext
 
 ### Single Run
 ```python
-from furax_cs import minimize
+from cadre import minimize
 
 final_params, state = minimize(
     fn=my_loss_fn,
@@ -139,7 +185,7 @@ Here is an example of running the same optimization problem with multiple solver
 import jax
 import jax.numpy as jnp
 import optimistix as optx
-from furax_cs.optim.solvers import get_solver
+from cadre.solvers import get_solver
 from functools import partial
 
 # Define a simple quadratic loss function

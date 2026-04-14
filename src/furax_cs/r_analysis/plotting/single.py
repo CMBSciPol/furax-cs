@@ -328,7 +328,7 @@ def _create_variance_vs_r_plot(
     else:
         cbar.set_label(f"Number of Clusters ({patch_name})")
 
-    plt.xlabel(r"Minimum Variance (Q + U) [$\mu$K]$^2$")
+    plt.xlabel(r"Variance (Q + U) [$\mu$K]$^2$")
     plt.ylabel(r"Tensor-to-scalar ratio  $r$")
     plt.ylim(-0.0005, 0.005)
     plt.axhline(y=0.0, color="black", linestyle="--", alpha=0.7, linewidth=1)
@@ -418,13 +418,7 @@ def plot_single_file_grouped(
                     # =================================================================================
                     # INJECTIONS TO BE DELETED
                     # =================================================================================
-                    if group_label == "hi-lat" and "vary_TD" in output_dir:
-                        ys_arr = np.asarray(ys, dtype=float)
-                        xs_at_3000_indx = np.where(np.array(xs) == 3000)[0]
-                        ys_at_4000 = ys_arr[np.where(np.array(xs) == 4000)[0]]
-                        ys_at_2000 = ys_arr[np.where(np.array(xs) == 2000)[0]]
-                        ys_arr[xs_at_3000_indx] = ys_at_4000 + (ys_at_2000 - ys_at_4000) * 0.0
-                        ys = ys_arr
+
                     if group_label.startswith("Synthetic with"):
                         xs = np.array(xs)
                         ymax, ymin = 1.05e-04, 8.51e-05

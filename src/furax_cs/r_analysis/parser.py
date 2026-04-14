@@ -196,6 +196,12 @@ ARGUMENT NOTES:
         default="min-value",
         help="Noise realization selection for bin edge definition: 'min-value', 'min-nll', or index",
     )
+    parser_bin.add_argument(
+        "--fwhm",
+        type=float,
+        default=None,
+        help="FWHM (degrees) for Gaussian HEALPix smoothing applied before binning. Omit for no smoothing.",
+    )
 
     # ==========================================
     # 3. PLOT SUBCOMMAND
@@ -354,6 +360,22 @@ ARGUMENT NOTES:
         metavar=("LO", "HI"),
         default=None,
         help="Two truth r values plotted as separate lines in BB spectra + vertical lines in r-likelihood (e.g. --r-plot 0 3e-3)",
+    )
+
+    parser_plot.add_argument(
+        "--cl-obs-label",
+        action="store_true",
+        default=False,
+        help=(
+            "Use C_ell^obs label for the dashed line in BB spectra plots "
+            "(for runs that include CMB signal). Default label is 'Total (C_ell^res)'."
+        ),
+    )
+    parser_plot.add_argument(
+        "--no-tot-residuals",
+        action="store_true",
+        default=False,
+        help="Omit the total residuals line from aggregate BB spectra plots.",
     )
 
     # Visualization Toggles

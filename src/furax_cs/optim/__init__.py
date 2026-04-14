@@ -1,41 +1,8 @@
-"""
-Optimization utilities for FURAX component separation.
+"""Compatibility shim — optimization has moved to the cadre package.
 
-This package provides:
-- L-BFGS solvers with zoom and backtracking linesearch
-- Box projection transformation for constrained optimization
-- Unified optimization interface supporting optax, optimistix, and scipy
-- Function conditioning (parameter transformation and gradient-based scaling)
-
-Example usage:
-    >>> from furax_cs.optim import minimize
-    >>>
-    >>> # Simple optimization
-    >>> params, state = minimize(
-    ...     fn=objective,
-    ...     init_params={'beta': 1.5},
-    ...     solver_name='optax_lbfgs',
-    ... )
+Import from cadre directly:
+    from cadre import minimize, get_solver, condition, ...
 """
 
-from .minimize import ScipyMinimizeState, minimize, scipy_minimize
-from .solvers import (
-    SOLVER_NAMES,
-    apply_projection,
-    get_solver,
-    lbfgs_backtrack,
-    lbfgs_zoom,
-)
-from .utils import condition
-
-__all__ = [
-    "SOLVER_NAMES",
-    "ScipyMinimizeState",
-    "apply_projection",
-    "condition",
-    "get_solver",
-    "lbfgs_backtrack",
-    "lbfgs_zoom",
-    "scipy_minimize",
-    "minimize",
-]
+from cadre import *  # noqa: F401, F403
+from cadre import __all__  # noqa: F401

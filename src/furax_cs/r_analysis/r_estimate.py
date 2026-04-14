@@ -133,6 +133,7 @@ def estimate_r(
         cl_obs = cl + cl_bb_lens  # Input is residual, add lensing
 
     r_grid = np.linspace(-max_point, max_point, 1000)
+    print(f"cl_noise is {cl_noise}")
     logL = _log_likelihood(r_grid, ell_range, cl_obs, cl_bb_r1, cl_bb_lens, cl_noise, f_sky)
     finite_logL = logL[np.isfinite(logL)]
     finite_r = r_grid[np.isfinite(logL)]

@@ -2,6 +2,18 @@
 
 from importlib import metadata
 
+from cadre import (
+    SOLVER_NAMES,
+    ScipyMinimizeState,
+    apply_projection,
+    condition,
+    get_solver,
+    lbfgs_backtrack,
+    lbfgs_zoom,
+    minimize,
+    scipy_minimize,
+)
+
 from . import r_analysis
 from .binning import bin_parameter_map
 from .data import (
@@ -28,17 +40,6 @@ from .data import (
 from .kmeans_clusters import kmeans_clusters
 from .multires_clusters import multires_clusters
 from .noise import generate_noise_operator
-from .optim import (
-    SOLVER_NAMES,
-    ScipyMinimizeState,
-    apply_projection,
-    condition,
-    get_solver,
-    lbfgs_backtrack,
-    lbfgs_zoom,
-    minimize,
-    scipy_minimize,
-)
 
 __all__ = [
     "bin_parameter_map",

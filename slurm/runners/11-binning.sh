@@ -69,7 +69,8 @@ RESULTS_DIR="RESULTS/KMEANS_C1D1S1"
 OUTPUT_DIR="RESULTS/BINNING_C1D1S1"
 
 # 3 optimal runs (same as section_45.sh)
-RUNS=(-r 'BD7500_TD500_BS500_GAL020' 'BD10000_TD6000_BS300_GAL040' 'BD10000_TD7000_BS500_GAL060')
+RUNS=(-r 'BD7000_TD500_BS500_GAL020' 'BD10000_TD500_BS150_GAL040' 'BD10000_TD2500_BS300_GAL060')
+
 
 # =============================================================================
 # Phase 1 & 2: For each bin config, bin then run kmeans

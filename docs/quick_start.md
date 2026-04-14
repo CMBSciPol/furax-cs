@@ -36,7 +36,8 @@ from furax.obs import (
 from furax.obs.stokes import Stokes
 from jax_healpy.clustering import get_cutout_from_mask, get_fullmap_from_cutout
 
-from furax_cs import generate_noise_operator, kmeans_clusters, minimize
+from cadre import minimize
+from furax_cs import generate_noise_operator, kmeans_clusters
 from furax_cs.data import (
     get_instrument,
     get_mask,

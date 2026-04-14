@@ -28,6 +28,102 @@ _BIN_PARAM_KEYS: dict[str, tuple[str, str]] = {
 _ALL_PARAM_NAMES = ["beta_dust", "temp_dust", "beta_pl"]
 
 
+def smooth_param_maps(
+    param_fullsky: dict[str, np.ndarray],
+    combined_mask: np.ndarray,
+    combined_valid: np.ndarray,
+    nside: int,
+    fwhm_deg: float,
+) -> dict[str, np.ndarray]:
+    """Smooth each parameter map with a Gaussian beam and return smoothed valid-pixel values.
+
+    Parameters
+    ----------
+    param_fullsky : dict[str, np.ndarray]
+        Mapping param_name -> 1-D array of valid-pixel values (no UNSEEN).
+    combined_mask : np.ndarray
+        Full-sky binary mask, shape ``(npix,)``, 1 = valid.
+    combined_valid : np.ndarray
+        Indices of valid pixels, i.e. ``np.where(combined_mask == 1)[0]``.
+    nside : int
+        HEALPix resolution. Maps are assumed to be in RING ordering.
+    fwhm_deg : float
+        FWHM in degrees.
+
+    Returns
+    -------
+    dict[str, np.ndarray]
+        Mapping param_name -> smoothed valid-pixel values (1-D, same length as input).
+    """
+    npix = hp.nside2npix(nside)
+    fwhm_rad = np.radians(fwhm_deg)
+    smoothed_valid: dict[str, np.ndarray] = {}
+    for param_name in _ALL_PARAM_NAMES:
+        valid_values = param_fullsky[param_name]
+        # Fill masked pixels with the mean of valid pixels to minimize boundary ringing
+        fill_value = float(np.mean(valid_values))
+        full_map = np.full(npix, fill_value, dtype=np.float64)
+        full_map[combined_valid] = valid_values.astype(np.float64)
+        # pol=False: each spectral-param map is an independent scalar spin-0 field
+        # Maps are RING-ordered (healpy default); hp.smoothing operates in RING
+        smoothed = hp.smoothing(full_map, fwhm=fwhm_rad, pol=False)
+        smoothed_valid[param_name] = smoothed[combined_valid]
+    return smoothed_valid
+
+
+def _plot_param_maps(
+    fullsky: dict[str, np.ndarray],
+    output_dir: str,
+    filename: str,
+    titles: list[str],
+) -> None:
+    """Plot a 1×3 mollview grid of parameter maps and save as *filename*."""
+    import matplotlib.pyplot as plt
+
+    plt.switch_backend("Agg")
+
+    keys = ["beta_dust", "temp_dust", "beta_pl"]
+    fig = plt.figure(figsize=(16, 8))
+    for i, (key, title) in enumerate(zip(keys, titles)):
+        hp.mollview(
+            fullsky[key],
+            title=title,
+            sub=(1, 3, i + 1),
+            bgcolor=(0.0,) * 4,
+            cbar=True,
+            format="%.4f",
+            hold=False,
+        )
+    out_path = os.path.join(output_dir, filename)
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    success(f"Saved map plot: {out_path}")
+
+
+def plot_original_maps(fullsky: dict[str, np.ndarray], output_dir: str) -> None:
+    """Plot pre-smoothing parameter maps → original_params.png."""
+    _plot_param_maps(
+        fullsky,
+        output_dir,
+        "original_params.png",
+        [r"$\beta_d$ (original)", r"$T_d$ [K] (original)", r"$\beta_s$ (original)"],
+    )
+
+
+def plot_smoothed_maps(fullsky: dict[str, np.ndarray], output_dir: str, fwhm_deg: float) -> None:
+    """Plot post-smoothing parameter maps → smoothed_params.png."""
+    _plot_param_maps(
+        fullsky,
+        output_dir,
+        "smoothed_params.png",
+        [
+            rf"$\beta_d$ (FWHM={fwhm_deg}$^\circ$)",
+            rf"$T_d$ [K] (FWHM={fwhm_deg}$^\circ$)",
+            rf"$\beta_s$ (FWHM={fwhm_deg}$^\circ$)",
+        ],
+    )
+
+
 def _squeeze_patches(arr: np.ndarray) -> np.ndarray:
     """Squeeze n_gridpts=1 leading dim from patch arrays if present."""
     if arr.ndim > 1:
@@ -41,6 +137,7 @@ def run_bin(
     output_dir: str,
     bin_config: dict[str, int],
     noise_selection: str = "min-value",
+    fwhm_deg: float | None = None,
 ) -> int:
     """Bin spectral parameters and write ``patches_{param}.npy`` files.
 
@@ -61,6 +158,12 @@ def run_bin(
     noise_selection : str
         Strategy to pick reference realization: ``'min-value'``, ``'min-nll'``,
         or an integer index.
+    fwhm_deg : float | None
+        If not None, smooth each parameter's full-sky map with a Gaussian
+        beam of this FWHM (degrees) before binning.  Smoothed full-sky arrays
+        (with ``hp.UNSEEN`` outside the mask) are saved as
+        ``smoothed_{param}.npy`` and ``smoothed_maps.npz``, and a mollview
+        plot is saved as ``smoothed_params.png``.
 
     Returns
     -------
@@ -123,6 +226,40 @@ def run_bin(
     for param_name in _ALL_PARAM_NAMES:
         full = np.asarray(combine_masks(all_cutouts[param_name], all_indices, nside))
         param_fullsky[param_name] = full[combined_valid]
+
+    # ------------------------------------------------------------------
+    # 2b. Optional HEALPix smoothing
+    # ------------------------------------------------------------------
+    if fwhm_deg is not None:
+        # Save & plot original maps before smoothing
+        orig_fullsky: dict[str, np.ndarray] = {}
+        orig_npz: dict[str, np.ndarray] = {}
+        for param_name in _ALL_PARAM_NAMES:
+            om = np.full(npix, hp.UNSEEN)
+            om[combined_valid] = param_fullsky[param_name]
+            orig_fullsky[param_name] = om
+            orig_npz[param_name] = om
+            np.save(os.path.join(output_dir, f"original_{param_name}.npy"), om)
+        np.savez(os.path.join(output_dir, "original_maps.npz"), **orig_npz)
+        info("Saved original_maps.npz")
+        plot_original_maps(orig_fullsky, output_dir)
+
+        info(f"Smoothing parameter maps with FWHM = {fwhm_deg} deg")
+        param_fullsky = smooth_param_maps(
+            param_fullsky, combined_mask, combined_valid, nside, fwhm_deg
+        )
+        # Reconstruct full-sky smoothed maps (UNSEEN outside mask) for saving/plotting
+        smoothed_fullsky: dict[str, np.ndarray] = {}
+        npz_data: dict[str, np.ndarray] = {}
+        for param_name in _ALL_PARAM_NAMES:
+            sm = np.full(npix, hp.UNSEEN)
+            sm[combined_valid] = param_fullsky[param_name]
+            smoothed_fullsky[param_name] = sm
+            npz_data[param_name] = sm
+            np.save(os.path.join(output_dir, f"smoothed_{param_name}.npy"), sm)
+        np.savez(os.path.join(output_dir, "smoothed_maps.npz"), **npz_data)
+        info("Saved smoothed_maps.npz")
+        plot_smoothed_maps(smoothed_fullsky, output_dir, fwhm_deg)
 
     # ------------------------------------------------------------------
     # 3. Bin each parameter & write patches .npy
