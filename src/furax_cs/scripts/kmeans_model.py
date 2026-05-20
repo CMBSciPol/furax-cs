@@ -72,6 +72,8 @@ from furax.obs import (
     sky_signal,
 )
 from furax.obs.stokes import Stokes
+from cadre import BoxConstraint
+
 from furax_cs import (
     MASK_CHOICES,
     generate_noise_operator,
@@ -502,8 +504,11 @@ def main():
         "linesearch": args.linesearch,
         "verbose_print": args.verbose,
         "cooldown": args.cooldown,
-        "min_steps": args.min_steps,
     }
+    # ``min_steps`` is deprecated in cadre 0.2 (KKT termination removed the need
+    # for it); we keep the CLI flag for backward compatibility but ignore it.
+    if getattr(args, "min_steps", None) is not None and args.min_steps != 0:
+        pass  # silently ignored
 
     def compute_minimum_variance(
         T_d_patches: int,
@@ -564,8 +569,7 @@ def main():
                 max_iter=args.max_iter,
                 atol=args.atol,
                 rtol=args.rtol,
-                lower_bound=lower_bound_tree,
-                upper_bound=upper_bound_tree,
+                constraints=BoxConstraint(lower=lower_bound_tree, upper=upper_bound_tree),
                 precondition=args.cond,
                 options=options,
                 nu=nu,

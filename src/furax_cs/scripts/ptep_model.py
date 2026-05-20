@@ -13,6 +13,8 @@ import jax.random
 import numpy as np
 from furax.obs import negative_log_likelihood, sky_signal
 from furax.obs.stokes import Stokes
+from cadre import BoxConstraint
+
 from furax_cs import (
     MASK_CHOICES,
     generate_noise_operator,
@@ -300,8 +302,7 @@ def main():
             max_iter=args.max_iter,
             atol=args.atol,
             rtol=args.rtol,
-            lower_bound=lower_bound_tree,
-            upper_bound=upper_bound_tree,
+            constraints=BoxConstraint(lower=lower_bound_tree, upper=upper_bound_tree),
             precondition=args.cond,
             options=options,
             nu=nu,
