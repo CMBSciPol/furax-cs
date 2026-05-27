@@ -313,12 +313,6 @@ EXAMPLES:
         help="Steps after a constraint release before termination is allowed (active set solvers).",
     )
     parser.add_argument(
-        "--min-steps",
-        type=int,
-        default=10,
-        help="Minimum iterations before termination is considered (active set solvers).",
-    )
-    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -403,7 +397,7 @@ def main():
         patches = f"BD{bd_label}_TD{td_label}_BS{bs_label}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
         config = (
             f"{args.solver}_cond{args.cond}_ls{args.linesearch}_noise{int(args.noise_ratio * 100)}"
-            f"_cd{args.cooldown}_ms{args.min_steps}"
+            f"_cd{args.cooldown}"
         )
 
         out_folder = f"{args.output}/kmeans_{args.tag}_{patches}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
@@ -502,7 +496,6 @@ def main():
         "linesearch": args.linesearch,
         "verbose_print": args.verbose,
         "cooldown": args.cooldown,
-        "min_steps": args.min_steps,
     }
 
     def compute_minimum_variance(

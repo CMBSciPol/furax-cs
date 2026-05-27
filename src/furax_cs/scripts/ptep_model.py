@@ -170,12 +170,6 @@ EXAMPLES:
         help="Steps after a constraint release before termination is allowed (active set solvers).",
     )
     parser.add_argument(
-        "--min-steps",
-        type=int,
-        default=10,
-        help="Minimum iterations before termination is considered (active set solvers).",
-    )
-    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -212,7 +206,7 @@ def main():
         ud_grades = f"BD{int(args.target_ud_grade[0])}_TD{int(args.target_ud_grade[1])}_BS{int(args.target_ud_grade[2])}_SP{args.starting_params[0]}_{args.starting_params[1]}_{args.starting_params[2]}"
         config = (
             f"{args.solver}_cond{args.cond}_noise{int(args.noise_ratio * 100)}"
-            f"_cd{args.cooldown}_ms{args.min_steps}"
+            f"_cd{args.cooldown}"
         )
         out_folder = f"{args.output}/ptep_{args.tag}_{ud_grades}_{args.instrument}_{sanitize_mask_name(args.mask)}_{config}"
 
@@ -284,7 +278,6 @@ def main():
     options = {
         "verbose_print": args.verbose,
         "cooldown": args.cooldown,
-        "min_steps": args.min_steps,
     }
 
     def single_run(noise_id):
