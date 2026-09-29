@@ -362,12 +362,17 @@ def compute_group(
     full_mask = np.logical_or.reduce(masks)
     f_sky = float(full_mask.sum() / len(full_mask))
 
-    combined_cmb_recon = combine_masks(cmb_recons, indices_list, nside, axis=1)
-    cmb_stokes = combine_masks(cmb_maps, indices_list, nside)
+    # Stokes objects place pixels on the last axis. furax <= 0.11 exposed StokesQU as
+    # two leaves of shape (..., npix), so the pixel axis happened to be axis 1 for the
+    # reconstructions and axis 0 for the single-realisation maps; from 0.12 a StokesQU
+    # is a single stacked leaf of shape (2, ..., npix) and those positions no longer
+    # hold. Indexing from the end is correct under both layouts and moves no data.
+    combined_cmb_recon = combine_masks(cmb_recons, indices_list, nside, axis=-1)
+    cmb_stokes = combine_masks(cmb_maps, indices_list, nside, axis=-1)
 
     wd = None
     if flags["compute_syst"] and len(w_d_list) > 0:
-        wd = combine_masks(w_d_list, indices_list, nside)
+        wd = combine_masks(w_d_list, indices_list, nside, axis=-1)
 
     # Combine foreground maps for parquet storage (rebinning support)
     fg_nocmb_q, fg_nocmb_u = None, None

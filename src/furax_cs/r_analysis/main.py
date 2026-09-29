@@ -164,6 +164,7 @@ def run_analysis() -> int | None:
             colors=args.color,
             xlim=args.xlim,
             r_legend_anchor=args.r_legend_anchor,
+            r_exponent=args.r_exponent,
             s_legend_anchor=args.s_legend_anchor,
             r_figsize=args.r_figsize,
             s_figsize=args.s_figsize,

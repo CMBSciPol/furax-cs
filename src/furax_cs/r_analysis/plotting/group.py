@@ -8,7 +8,13 @@ import numpy as np
 from jaxtyping import Array, Float
 
 from ...logging_utils import debug, warning
-from . import get_run_color, save_or_show
+from . import (
+    format_power_of_ten,
+    format_r_with_errors,
+    get_run_color,
+    resolve_r_exponents,
+    save_or_show,
+)
 
 
 def plot_all_cl_residuals(
@@ -57,7 +63,7 @@ def plot_all_cl_residuals(
                         color="grey",
                         linestyle="--",
                         linewidth=1.5,
-                        label=rf"$C_\ell^{{BB}},\; r={r_val:.0e}$",
+                        label=rf"$C_\ell^{{BB}},\; r = {format_power_of_ten(r_val)}$",
                     )
         elif r_range is not None:
             r_lo, r_hi = r_range
@@ -67,7 +73,10 @@ def plot_all_cl_residuals(
                 r_hi * cl_bb_r1,
                 color="grey",
                 alpha=0.35,
-                label=rf"$C_\ell^{{BB}},\; r\in[{r_lo:.0e},\,{r_hi:.0e}]$",
+                label=(
+                    rf"$C_\ell^{{BB}},\; r \in "
+                    rf"[{format_power_of_ten(r_lo)},\, {format_power_of_ten(r_hi)}]$"
+                ),
             )
         else:
             r_lo, r_hi = 1e-3, 4e-3
@@ -288,10 +297,15 @@ def plot_all_r_estimation(
     xlim: tuple[float, float] | None = None,
     legend_anchor: tuple[float, float] | None = None,
     figsize: tuple[float, float] | None = None,
+    exponent: int | None = None,
     r_plot: tuple[float, float] | None = None,
     transparent: bool = True,
 ) -> None:
-    """Compare r likelihood curves across runs in a single figure."""
+    """Compare r likelihood curves across runs in a single figure.
+
+    *exponent* forces the power of ten every curve is quoted in; without it each panel
+    picks its own, which can leave two figures showing the same result differently.
+    """
 
     _fs = plt.rcParams["font.size"]
     rc_overrides = {
@@ -302,6 +316,23 @@ def plot_all_r_estimation(
         "legend.fontsize": _fs * 0.8,
         "axes.titlesize": _fs,
     }
+
+    # Every curve of the panel is quoted in the same power of ten where the dynamic
+    # range allows it, so the legend can be read down as a column of comparable
+    # numbers. Entries without an estimate keep a placeholder to preserve indexing.
+    estimated = [
+        (r_data["r_best"], r_data["sigma_r_pos"], r_data["sigma_r_neg"])
+        for r_data in r_pytree_list
+        if r_data["r_best"] is not None
+    ]
+    if exponent is None:
+        panel_exponents = resolve_r_exponents(estimated)
+    else:
+        panel_exponents = [exponent] * len(estimated)
+    shared_exponents = iter(panel_exponents)
+    r_exponents = [
+        next(shared_exponents) if r_data["r_best"] is not None else None for r_data in r_pytree_list
+    ]
 
     with plt.rc_context(rc_overrides):
         plt.figure(figsize=figsize if figsize else (10, 8))
@@ -319,10 +350,12 @@ def plot_all_r_estimation(
             color = get_run_color(i, colors)
             likelihood = L_vals / L_vals.max()
 
+            r_label = format_r_with_errors(r_best, sigma_r_pos, sigma_r_neg, r_exponents[i])
+
             plt.plot(
                 r_grid,
                 likelihood,
-                label=rf"{name} $\hat{{r}} = {r_best:.2e}^{{+{sigma_r_pos:.1e}}}_{{-{sigma_r_neg:.1e}}}$",
+                label=rf"{name} $\hat{{r}} = {r_label}$",
                 color=color,
             )
 
@@ -349,7 +382,7 @@ def plot_all_r_estimation(
                     color="black",
                     linestyle="--",
                     alpha=0.7,
-                    label=rf"Truth $r={r_truth:.0e}$",
+                    label=rf"Truth $r = {format_power_of_ten(r_truth)}$",
                 )
 
         plt.xlabel(r"$r$")

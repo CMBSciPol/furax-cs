@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import healpy as hp
@@ -74,6 +75,150 @@ def get_run_color(index: int, colors: list[str] | None = None) -> str:
     prop_cycle = plt.rcParams["axes.prop_cycle"]
     cycle_colors = prop_cycle.by_key()["color"]
     return cycle_colors[index % len(cycle_colors)]
+
+
+# ---------------------------------------------------------------------------
+# Number formatting
+# ---------------------------------------------------------------------------
+# Decade used when an entry carries no usable magnitude of its own.
+R_DEFAULT_EXPONENT = -3
+# A panel keeps one shared exponent while its entries stay within this dynamic range.
+# Beyond it a single exponent would round the smallest entry away, so each entry falls
+# back to its own decade.
+R_MAX_PANEL_SPAN = 20.0
+# Significant digits allowed on each uncertainty.
+R_SIGNIFICANT_DIGITS = 2
+
+
+def resolve_r_exponents(
+    entries: list[tuple[float, float, float]],
+    max_panel_span: float = R_MAX_PANEL_SPAN,
+) -> list[int]:
+    """Choose the power of ten each (r, +sigma, -sigma) triplet is quoted in.
+
+    The exponent comes from the largest quantity in the entry, which for a measurement
+    consistent with zero is the uncertainty rather than the estimate. Scaling on the
+    uncertainty keeps both printed to a comparable size; scaling on an estimate that is
+    a small fraction of its own error turns the legend into things like 8.5 +65 -27.
+
+    All entries of a panel share one exponent whenever their dynamic range allows it,
+    so the curves can be compared digit by digit. When the panel spans more than
+    *max_panel_span*, a shared exponent would print the smallest uncertainty as 0.0,
+    and each entry falls back to its own decade instead.
+
+    Parameters
+    ----------
+    entries : list of (float, float, float)
+        One ``(r_best, sigma_r_pos, sigma_r_neg)`` triplet per curve.
+    max_panel_span : float
+        Largest ratio between the biggest quantity in the panel and the smallest
+        uncertainty that still allows a shared exponent.
+
+    Returns
+    -------
+    list of int
+        One exponent per entry, in the order given.
+    """
+    if not entries:
+        return []
+
+    scales = [max(abs(float(r)), abs(float(sp)), abs(float(sn))) for r, sp, sn in entries]
+    errors = [max(abs(float(sp)), abs(float(sn))) for _, sp, sn in entries]
+    usable_scales = [s for s in scales if np.isfinite(s) and s > 0]
+    usable_errors = [e for e in errors if np.isfinite(e) and e > 0]
+
+    if not usable_scales or not usable_errors:
+        return [R_DEFAULT_EXPONENT] * len(entries)
+
+    largest = max(usable_scales)
+    if largest / min(usable_errors) <= max_panel_span:
+        shared = int(np.floor(np.log10(largest)))
+        return [shared] * len(entries)
+
+    return [
+        int(np.floor(np.log10(s))) if np.isfinite(s) and s > 0 else R_DEFAULT_EXPONENT
+        for s in scales
+    ]
+
+
+def _mantissa(value: float, exponent: int, significant: int | None = None) -> str:
+    """Mantissa of *value* at 10**exponent, without a signed zero.
+
+    With *significant* set the mantissa is rounded to that many significant digits,
+    which is how the uncertainties are quoted; otherwise it keeps one decimal, which is
+    how the estimate is quoted.
+
+    Scales and rounds in decimal rather than binary. Dividing by ``10.0**-3`` turns a
+    boundary value such as 6.5e-4 into 0.6499999999999999, which then rounds down and
+    biases every half-way uncertainty towards zero.
+    """
+    scaled = Decimal(repr(float(value))).scaleb(-exponent)
+
+    if significant is None or scaled == 0:
+        quantum = Decimal("0.1")
+    else:
+        quantum = Decimal(1).scaleb(scaled.copy_abs().adjusted() - significant + 1)
+
+    text = format(scaled.quantize(quantum, rounding=ROUND_HALF_UP), "f")
+    return text[1:] if text.startswith("-") and float(text) == 0 else text
+
+
+def format_r_with_errors(
+    r_best: float,
+    sigma_r_pos: float,
+    sigma_r_neg: float,
+    exponent: int | None = None,
+) -> str:
+    r"""Typeset an r estimate and its 68% interval with one shared exponent.
+
+    Renders ``(0.1\,^{+2.7}_{-2.6}) \times 10^{-3}``: the estimate and both
+    uncertainties are scaled by the same power of ten and quoted to one decimal, so
+    the dominant quantity carries two significant digits and no more. Quoting a mean
+    and its error in different decades hides how many of the mean's digits are
+    actually constrained.
+
+    Parameters
+    ----------
+    r_best : float
+        Maximum-likelihood estimate.
+    sigma_r_pos, sigma_r_neg : float
+        Upper and lower 68% offsets from *r_best*.
+    exponent : int or None
+        Power of ten to quote in. Chosen from this entry alone when omitted; pass the
+        panel value from :func:`resolve_r_exponents` to keep a figure consistent.
+
+    Returns
+    -------
+    str
+        LaTeX math fragment, without surrounding ``$``.
+    """
+    if exponent is None:
+        exponent = resolve_r_exponents([(r_best, sigma_r_pos, sigma_r_neg)])[0]
+
+    centre = _mantissa(r_best, exponent)
+    upper = _mantissa(abs(float(sigma_r_pos)), exponent, R_SIGNIFICANT_DIGITS)
+    lower = _mantissa(abs(float(sigma_r_neg)), exponent, R_SIGNIFICANT_DIGITS)
+    return rf"({centre}\,^{{+{upper}}}_{{-{lower}}}) \times 10^{{{exponent}}}"
+
+
+def format_power_of_ten(value: float) -> str:
+    r"""Typeset a lone number as ``3 \times 10^{-3}``, or ``0`` when it vanishes."""
+    value = float(value)
+    if value == 0.0:
+        return "0"
+
+    exponent = int(np.floor(np.log10(abs(value))))
+    mantissa = value / 10.0**exponent
+    if abs(mantissa - round(mantissa)) < 1e-6:
+        mantissa_text = f"{round(mantissa):d}"
+    else:
+        mantissa_text = f"{mantissa:.1f}"
+
+    if mantissa_text == "1":
+        return rf"10^{{{exponent}}}"
+    if mantissa_text == "-1":
+        return rf"-10^{{{exponent}}}"
+    return rf"{mantissa_text} \times 10^{{{exponent}}}"
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +353,7 @@ def plot_indiv_results(
     subfolder: str | None = None,
     xlim: tuple[float, float] | None = None,
     r_legend_anchor: tuple[float, float] | None = None,
+    r_exponent: int | None = None,
     r_figsize: tuple[float, float] | None = None,
     transparent: bool = True,
 ) -> None:
@@ -376,6 +522,7 @@ def plot_indiv_results(
             xlim=xlim,
             legend_anchor=r_legend_anchor,
             figsize=r_figsize,
+            exponent=r_exponent,
             transparent=transparent,
         )
 
@@ -405,6 +552,7 @@ def plot_aggregate_results(
     colors: list[str] | None = None,
     xlim: tuple[float, float] | None = None,
     r_legend_anchor: tuple[float, float] | None = None,
+    r_exponent: int | None = None,
     s_legend_anchor: tuple[float, float] | None = None,
     r_figsize: tuple[float, float] | None = None,
     s_figsize: tuple[float, float] | None = None,
@@ -501,6 +649,7 @@ def plot_aggregate_results(
             xlim=xlim,
             legend_anchor=r_legend_anchor,
             figsize=r_figsize,
+            exponent=r_exponent,
             r_plot=r_plot,
             transparent=transparent,
         )
@@ -524,6 +673,7 @@ def run_grouped_plot(
     colors: list[str] | None = None,
     xlim: tuple[float, float] | None = None,
     r_legend_anchor: tuple[float, float] | None = None,
+    r_exponent: int | None = None,
     s_legend_anchor: tuple[float, float] | None = None,
     r_figsize: tuple[float, float] | None = None,
     s_figsize: tuple[float, float] | None = None,
@@ -628,6 +778,7 @@ def run_grouped_plot(
                 subfolder=result.kw,
                 xlim=xlim,
                 r_legend_anchor=r_legend_anchor,
+                r_exponent=r_exponent,
                 r_figsize=r_figsize,
                 transparent=transparent,
             )
@@ -650,6 +801,7 @@ def run_grouped_plot(
             colors=colors,
             xlim=xlim,
             r_legend_anchor=r_legend_anchor,
+            r_exponent=r_exponent,
             s_legend_anchor=s_legend_anchor,
             r_figsize=r_figsize,
             s_figsize=s_figsize,
