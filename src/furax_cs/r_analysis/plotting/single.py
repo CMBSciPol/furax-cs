@@ -152,8 +152,15 @@ def _create_variance_vs_r_plot(
     output_dir: str = "plots",
     overlap_threshold: float = 0.02,
     transparent: bool = True,
+    mode: str = "both",
 ) -> None:
-    """Helper to plot variance vs best-fit r for a given parameter/totals."""
+    """Helper to plot variance vs best-fit r for a given parameter/totals.
+
+    ``mode`` selects which markers are drawn: ``"both"`` (open r + filled r+sigma,
+    the original look), ``"r"`` (only open r circles), or ``"rsigma"`` (only filled
+    r+sigma circles). Point selection/thinning is identical across modes so the three
+    variants are directly comparable.
+    """
     points = []
     is_total = patch_key == "total"
     base_patch_keys = ["beta_dust_patches", "temp_dust_patches", "beta_pl_patches"]
@@ -197,6 +204,14 @@ def _create_variance_vs_r_plot(
         return
 
     points.sort(key=lambda p: p[0])
+    if mode == "r":
+        # TEMP: r-only view -- truncate at the r-minimum so the remaining curve is
+        # the monotonic-decrease branch (drops the higher-patch beta_s tail where
+        # extra patches re-add noise above sigma(r) and r ticks back up).
+        r_all = np.array([p[1] for p in points])
+        k_all = np.array([p[2] for p in points])
+        k_cut = k_all[int(np.argmin(r_all))]
+        points = [p for p in points if p[2] <= k_cut]
     variances = np.array([p[0] for p in points])
     r_values = np.array([p[1] for p in points])
     k_values = np.array([p[2] for p in points])
@@ -250,52 +265,74 @@ def _create_variance_vs_r_plot(
     y_uppers = np.array(y_uppers)
     c_vals = np.array(c_vals)
 
-    plt.scatter(
-        xs, y_means, facecolors="none", edgecolors=c_vals, s=80, linewidth=1, alpha=0.6, zorder=2
-    )
+    show_r = mode in ("both", "r")
+    show_rsigma = mode in ("both", "rsigma")
 
-    _ = plt.scatter(
-        xs,
-        y_uppers,
-        c=c_vals,
-        s=80,
-        edgecolors="black",
-        linewidth=0.5,
-        alpha=0.7,
-        zorder=3,
-    )
+    if show_r:
+        plt.scatter(
+            xs,
+            y_means,
+            facecolors="none",
+            edgecolors=c_vals,
+            s=80,
+            linewidth=1,
+            alpha=0.6,
+            zorder=2,
+        )
 
-    legend_elements = [
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            label=r"$r$",
-            markerfacecolor="none",
-            markeredgecolor="black",
-            markersize=8,
-        ),
-        Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="w",
-            label=r"$r + \sigma(r)$",
-            markerfacecolor="black",
-            markeredgecolor="black",
-            markersize=8,
-        ),
-    ]
+    if show_rsigma:
+        _ = plt.scatter(
+            xs,
+            y_uppers,
+            c=c_vals,
+            s=80,
+            edgecolors="black",
+            linewidth=0.5,
+            alpha=0.7,
+            zorder=3,
+        )
+
+    legend_elements = []
+    if show_r:
+        legend_elements.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                label=r"$r$",
+                markerfacecolor="none",
+                markeredgecolor="black",
+                markersize=8,
+            )
+        )
+    if show_rsigma:
+        legend_elements.append(
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                label=r"$r + \sigma(r)$",
+                markerfacecolor="black",
+                markeredgecolor="black",
+                markersize=8,
+            )
+        )
     plt.legend(
         handles=legend_elements, loc="upper right", frameon=True, framealpha=0.9, fancybox=True
     )
 
     ax = plt.gca()
     ax.ticklabel_format(style="sci", axis="x", scilimits=(0, 0), useMathText=True)
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 1e3:.0f}"))
-    ax.yaxis.offsetText.set_visible(False)
-    ax.annotate(r"$\times 10^{-3}$", xy=(0, 1), xycoords="axes fraction", fontsize=font_size - 4)
+    if mode in ("r", "both"):
+        ax.set_yscale("log")
+    else:
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 1e3:.0f}"))
+        ax.yaxis.offsetText.set_visible(False)
+        ax.annotate(
+            r"$\times 10^{-3}$", xy=(0, 1), xycoords="axes fraction", fontsize=font_size - 4
+        )
 
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
@@ -330,14 +367,23 @@ def _create_variance_vs_r_plot(
 
     plt.xlabel(r"Variance (Q + U) [$\mu$K]$^2$")
     plt.ylabel(r"Tensor-to-scalar ratio  $r$")
-    plt.ylim(-0.0005, 0.005)
-    plt.axhline(y=0.0, color="black", linestyle="--", alpha=0.7, linewidth=1)
+    if mode == "r":
+        plt.ylim(3e-6, 6e-3)
+    elif mode == "both":
+        # log y, full chain: r+sigma keeps its V; r open circles below the ~1e-4
+        # noise floor (<< sigma(r), where r is non-monotonic) fall off the bottom,
+        # so the visible r curve reads as a clean monotonic decrease.
+        plt.ylim(1e-4, 6e-3)
+    else:
+        plt.ylim(-0.0005, 0.005)
+        plt.axhline(y=0.0, color="black", linestyle="--", alpha=0.7, linewidth=1)
     plt.grid(True, linestyle="--", alpha=0.6)
     plt.tight_layout()
 
     filename_suffix = "total" if is_total else patch_key.replace("_patches", "")
+    mode_suffix = {"both": "", "r": "_r_only", "rsigma": "_rsigma_only"}[mode]
     save_or_show(
-        f"variance_vs_residual_r_{filename_suffix}",
+        f"variance_vs_residual_r_{filename_suffix}{mode_suffix}",
         output_format,
         output_dir=output_dir,
         transparent=transparent,
@@ -371,17 +417,20 @@ def plot_variance_vs_r(
     }
 
     with plt.rc_context(rc_overrides):
-        for patch_name, patch_key in patch_configs:
-            _create_variance_vs_r_plot(
-                patch_name,
-                patch_key,
-                names,
-                cmb_pytree_list,
-                r_pytree_list,
-                output_format,
-                output_dir=output_dir,
-                transparent=transparent,
-            )
+        # TEMP: emit 3 variants per config -- r only, r+sigma only, and both.
+        for mode in ("both", "r", "rsigma"):
+            for patch_name, patch_key in patch_configs:
+                _create_variance_vs_r_plot(
+                    patch_name,
+                    patch_key,
+                    names,
+                    cmb_pytree_list,
+                    r_pytree_list,
+                    output_format,
+                    output_dir=output_dir,
+                    transparent=transparent,
+                    mode=mode,
+                )
 
 
 def plot_single_file_grouped(

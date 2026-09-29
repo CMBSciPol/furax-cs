@@ -322,6 +322,15 @@ ARGUMENT NOTES:
         help="bbox_to_anchor for the legend in r-estimation plots (e.g. --r-legend-anchor 1.0 1.0)",
     )
     parser_plot.add_argument(
+        "--r-exponent",
+        type=int,
+        default=None,
+        help=(
+            "Power of ten every r estimate in the r-estimation plots is quoted in "
+            "(e.g. --r-exponent -4). Chosen from the data when omitted."
+        ),
+    )
+    parser_plot.add_argument(
         "--s-legend-anchor",
         nargs=2,
         type=float,

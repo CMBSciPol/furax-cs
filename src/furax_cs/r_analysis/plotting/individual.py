@@ -384,6 +384,7 @@ def plot_r_estimator(
     xlim: tuple[float, float] | None = None,
     legend_anchor: tuple[float, float] | None = None,
     figsize: tuple[float, float] | None = None,
+    exponent: int | None = None,
     transparent: bool = True,
 ) -> None:
     """Plot one-dimensional likelihood for r with highlighted estimate."""
@@ -394,7 +395,7 @@ def plot_r_estimator(
     plt.plot(
         r_grid,
         likelihood,
-        label=rf"{name} $\hat{{r}} = {r_best:.2e}^{{+{sigma_r_pos:.1e}}}_{{-{sigma_r_neg:.1e}}}$",
+        label=rf"{name} $\hat{{r}} = {format_r_with_errors(r_best, sigma_r_pos, sigma_r_neg, exponent)}$",
         color="purple",
         linewidth=2,
     )

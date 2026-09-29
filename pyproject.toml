@@ -18,7 +18,8 @@ dependencies = [
   "astropy",
   "optimistix",
   "jax-cadre",
-  "scienceplots"
+  "scienceplots",
+  "fgbuster"
 ]
 description = "GPU Powered CMB Parametric Component Seperation using Furax and JAX"
 license = {file = "LICENSE"}
@@ -110,3 +111,7 @@ packages = {find = {include = ["furax_cs*"], where = ["src"]}}
 
 [tool.setuptools.package-data]
 "furax_cs.data" = ["*.yaml", "masks/*", "pixelsubset/*"]
+
+[tool.uv.sources]
+fgbuster = {git = "https://github.com/fgbuster/fgbuster"}
+optimistix = {git = "https://github.com/ASKabalan/optimistix.git"}
