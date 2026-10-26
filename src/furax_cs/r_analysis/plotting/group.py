@@ -14,6 +14,7 @@ from . import (
     get_run_color,
     resolve_r_exponents,
     save_or_show,
+    slides,
 )
 
 
@@ -316,6 +317,8 @@ def plot_all_r_estimation(
         "legend.fontsize": _fs * 0.8,
         "axes.titlesize": _fs,
     }
+    if slides.ENABLED:
+        rc_overrides = {"legend.fontsize": 11.5}
 
     # Every curve of the panel is quoted in the same power of ten where the dynamic
     # range allows it, so the legend can be read down as a column of comparable
@@ -355,8 +358,9 @@ def plot_all_r_estimation(
             plt.plot(
                 r_grid,
                 likelihood,
-                label=rf"{name} $\hat{{r}} = {r_label}$",
+                label=rf"{name}  $\hat{{r}} = {r_label}$" if slides.ENABLED else rf"{name} $\hat{{r}} = {r_label}$",
                 color=color,
+                lw=2.2 if slides.ENABLED else None,
             )
 
             plt.fill_between(
@@ -372,8 +376,13 @@ def plot_all_r_estimation(
                 x=r_best,
                 color=color,
                 linestyle="--",
-                alpha=0.7,
+                alpha=0.8 if slides.ENABLED else 0.7,
+                lw=1.4 if slides.ENABLED else None,
             )
+
+        if slides.ENABLED and slides.TRUTH is not None:
+            plt.axvline(x=slides.TRUTH, color=slides.INK, linestyle=":", lw=1.6,
+                        label=rf"truth $r = {format_power_of_ten(slides.TRUTH)}$")
 
         if r_plot is not None:
             for r_truth in r_plot:
@@ -386,18 +395,28 @@ def plot_all_r_estimation(
                 )
 
         plt.xlabel(r"$r$")
-        plt.ylabel(r"$L_{\text{cosmo}}$")
+        plt.ylabel(r"$L_{\mathrm{cosmo}}$" if slides.ENABLED else r"$L_{\text{cosmo}}$")
         if xlim:
             plt.xlim(*xlim)
         else:
             plt.xlim(-0.002, 0.005)
-        plt.grid(True, which="both", ls=":")
+        if slides.ENABLED:
+            from matplotlib.ticker import MaxNLocator
+
+            plt.ylim(0, 1.42 if slides.TRUTH is None else 1.55)
+            plt.yticks([0, 0.25, 0.5, 0.75, 1.0])
+            plt.gca().xaxis.set_major_locator(MaxNLocator(5, steps=[1, 2, 5, 10]))
+            plt.grid(True, which="both", ls=":", alpha=0.6)
+        else:
+            plt.grid(True, which="both", ls=":")
 
         legend_kwargs: dict = {
             "borderaxespad": 0,
             "frameon": True,
             "framealpha": 0.95,
         }
+        if slides.ENABLED:
+            del legend_kwargs["borderaxespad"]
         if legend_anchor is not None:
             legend_kwargs["bbox_to_anchor"] = tuple(legend_anchor)
             legend_kwargs["loc"] = "upper right"

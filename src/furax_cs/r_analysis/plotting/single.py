@@ -15,7 +15,7 @@ from matplotlib.lines import Line2D
 from matplotlib.ticker import FuncFormatter
 
 from ...logging_utils import info
-from . import get_run_color, save_or_show
+from . import get_run_color, save_or_show, slides
 
 font_size = 22
 
@@ -457,9 +457,11 @@ def plot_single_file_grouped(
             "ytick.labelsize": _tick_size,
             "legend.fontsize": int(font_size * 0.8),
         }
+        if slides.ENABLED:
+            rc_overrides = {}
         for patch_name, patch_key in patch_configs:
             with plt.rc_context(rc_overrides):
-                fig, ax = plt.subplots(figsize=(8, 6))
+                fig, ax = plt.subplots(figsize=(5.4, 3.4) if slides.ENABLED else (8, 6))
                 all_xs: list = []
                 for i, (group_label, _names, kw_to_plot) in enumerate(all_groups):
                     points = _extract_r_vs_clusters_points(patch_key, kw_to_plot)
@@ -469,6 +471,14 @@ def plot_single_file_grouped(
                     min_x = int(xs[min_idx])
                     min_y = float(ys_arr[min_idx])
                     color = get_run_color(i, colors)
+                    info(f"r_vs_c {patch_key} {group_label}: minimum at {min_x} ({min_y:.4e})")
+                    if slides.ENABLED:
+                        # (r + sigma) in units of 1e-3, the minimum ringed
+                        ax.plot(xs, ys_arr * 1e3, "o-", color=color, ms=4, lw=1.8, label=group_label)
+                        ax.scatter(min_x, min_y * 1e3, s=160, facecolors="none", edgecolors=color,
+                                   linewidths=2.2, zorder=5)
+                        all_xs.extend(list(xs))
+                        continue
                     ax.plot(
                         xs,
                         ys,
@@ -493,12 +503,18 @@ def plot_single_file_grouped(
                     x_margin = max((x_max - x_min) * 0.06, 5)
                     ax.set_xlim(x_min - x_margin, x_max + x_margin)
 
-                ax.ticklabel_format(style="sci", axis="y", scilimits=(0, 0), useMathText=True)
+                if slides.ENABLED:
+                    ax.set_xlabel(f"number of patches {patch_name}")
+                    ax.set_ylabel(r"$(r+\sigma)\times10^{3}$")
+                    ax.grid(True, ls=":", alpha=0.5)
+                    ax.legend(loc="best", frameon=True, framealpha=0.95)
+                else:
+                    ax.ticklabel_format(style="sci", axis="y", scilimits=(0, 0), useMathText=True)
 
-                ax.set_xlabel(f"Number of Patches ({patch_name})")
-                ax.set_ylabel(r"Tensor-to-scalar ratio ($r + \sigma(r)$)")
-                ax.grid(True, linestyle="--", alpha=0.6)
-                ax.legend(loc="best", frameon=True, framealpha=0.9)
+                    ax.set_xlabel(f"Number of Patches ({patch_name})")
+                    ax.set_ylabel(r"Tensor-to-scalar ratio ($r + \sigma(r)$)")
+                    ax.grid(True, linestyle="--", alpha=0.6)
+                    ax.legend(loc="best", frameon=True, framealpha=0.9)
                 fig.tight_layout()
                 suffix = patch_key.replace("_patches", "")
                 save_or_show(

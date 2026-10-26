@@ -135,6 +135,10 @@ def run_analysis() -> int | None:
 
         if args.no_tex:
             plt.rcParams["text.usetex"] = False
+        if args.slides:
+            from .plotting import slides
+
+            slides.enable(args.r_truth)
 
         parquet_dirs = [Path(d) for d in args.parquet_dir]
         all_parquets = sorted(p for d in parquet_dirs for p in d.glob("*.parquet"))

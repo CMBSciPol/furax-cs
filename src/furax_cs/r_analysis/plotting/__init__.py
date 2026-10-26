@@ -252,6 +252,10 @@ def set_font_size(size: int) -> None:
     """Set global font size for all plotting functions."""
     global font_size
     font_size = size
+    from . import slides
+
+    if slides.ENABLED:  # the slide style sets its own sizes
+        return
     plt.rcParams.update(
         {
             "font.size": font_size,
@@ -277,7 +281,7 @@ def save_or_show(
     if output_format == "show":
         plt.show()
     else:
-        ext = "pdf" if output_format == "pdf" else "png"
+        ext = output_format if output_format in ("pdf", "svg") else "png"
         dpi = 1200 if ext == "png" else None
         filename = _truncate_name_if_too_long(filename)
 

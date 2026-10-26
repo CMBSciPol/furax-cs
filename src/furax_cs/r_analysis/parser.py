@@ -282,9 +282,20 @@ ARGUMENT NOTES:
     parser_plot.add_argument(
         "--output-format",
         type=str,
-        choices=["png", "pdf", "show"],
+        choices=["png", "pdf", "svg", "show"],
         default="png",
-        help="Output format: png, pdf, or show (inline)",
+        help="Output format: png, pdf, svg, or show (inline)",
+    )
+    parser_plot.add_argument(
+        "--slides",
+        action="store_true",
+        help="Slide look (sans-serif, no TeX, compact figures) for the r-vs-clusters and r-likelihood plots",
+    )
+    parser_plot.add_argument(
+        "--r-truth",
+        type=float,
+        default=None,
+        help="With --slides: true r, drawn as a dotted vertical line on the r-likelihood plots",
     )
     parser_plot.add_argument(
         "--font-size",
