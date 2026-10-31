@@ -28,6 +28,7 @@ except ImportError:
         "  pip install git+https://github.com/fgbuster/fgbuster.git"
     )
 
+from cadre import BoxConstraint
 from furax.obs import negative_log_likelihood, spectral_cmb_variance
 from furax.obs.stokes import Stokes
 from furax_cs import (
@@ -238,8 +239,7 @@ def run_jax_minimize(
             rtol=tol * 1e5,
             atol=tol,
             precondition=precondition,
-            lower_bound=lower_params,
-            upper_bound=upper_params,
+            constraints=BoxConstraint(lower=lower_params, upper=upper_params),
         )
 
         last_L = nll(final_params)

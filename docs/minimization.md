@@ -97,22 +97,34 @@ This prevents numerical under/overflow across the extreme dynamic range between 
 
 The step size α is capped at the distance to the nearest bound (α_max), then a line search finds the optimal α in [0, α_max]. If a parameter hits a bound, it becomes an active constraint.
 
-## Termination Control (ADABK solvers)
+## Termination Control (ADABK / LBFGSK solvers)
 
-Four parameters control when ADABK solvers decide to stop. Pass them via the `options` dict of `minimize()`:
+The active-set families terminate on the **physical-space KKT condition**: when the
+projected gradient norm in physical space falls below `atol + rtol × max(1, |best_f|)`,
+the optimizer stops. There is also a relaxed Cauchy fallback gated by `sqrt(tol)` to
+absorb the numerical floor of the dynamic-rescaling pipeline.
+
+Recognised `options` keys (active-set solvers):
 
 ```python
 final_params, state = minimize(
     fn=my_loss_fn,
     init_params=params,
-    solver_name="ADABK0",
+    solver_name="LBFGSK0",            # or "ADABK0"
     lower_bound=lower,
     upper_bound=upper,
     options={
-        "cooldown": 50,              # default: 20
-        "min_steps": 200,            # default: 10
-        "verbose_print": True,       # default: False
-        "max_linesearch_steps": 100, # default: 50
+        "cooldown": 50,               # default: 20
+        "verbose_print": True,        # default: False
+        "max_linesearch_steps": 100,  # default: 50
+        "linesearch": "zoom",         # default: "zoom"
+        # Langevin noise (default off):
+        "noise_temperature": 0.0,     # >0 enables; e.g. 0.5–2.0 for escape
+        "noise_decay": 1e-3,
+        "noise_key": 0,
+        # LBFGSK-only:
+        "lbfgs_ema_decay": 0.0,       # 0 → pure L-BFGS; e.g. 0.9 for noisy gradients
+        "memory_size": 10,
     },
 )
 ```
@@ -120,25 +132,36 @@ final_params, state = minimize(
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `cooldown` | `20` | Steps to suppress termination after a constraint is released. Prevents premature convergence caused by a transient function spike when a bound constraint opens. |
-| `min_steps` | `10` | Minimum iterations before termination is ever considered. Useful when the initial gradient is near zero but the landscape is not yet explored. |
-| `verbose_print` | `False` | Print per-step diagnostics: current `f`, `f_diff`, `best_f`, cooldown status, and termination decision. Uses `jax.debug.print` so it is JIT-compatible. |
+| `verbose_print` | `False` | Per-step diagnostics via `jax.debug.print` (JIT-compatible): current `f`, `gnorm`, KKT / Cauchy flags. |
 | `max_linesearch_steps` | `50` | Maximum bounded line-search steps per iteration. |
+| `linesearch` | `"zoom"` | `"zoom"` (strong Wolfe) or `"backtracking"` (Armijo only). |
+| `noise_temperature` | `0.0` | Langevin noise amplitude. `0.0` disables noise. The kick is **post-line-search** (not gated by Wolfe), so it can escape local minima. |
+| `noise_decay` | `1e-3` | Exponential decay rate of the noise temperature with step count. |
+| `noise_key` | `0` | PRNG seed. |
+| `lbfgs_ema_decay` | `0.0` | (LBFGSK only) EMA "belief factor" on gradients before the L-BFGS update. `0.0` ⇒ pure L-BFGS; higher values smooth noisy gradients. |
+| `memory_size` | `10` | (LBFGSK only) L-BFGS history length. |
+
+> **Note:** `min_steps` was deprecated in cadre 0.2 (the KKT termination removed the
+> need for it). The CLI still accepts `--min-steps` for backward compatibility but
+> ignores the value.
 
 ### How termination is decided
 
-Termination requires **all** of the following to hold simultaneously:
+The active-set solvers stop on **either** condition:
 
-1. `f_diff = |f_current − f_prev| < atol + rtol × max(1, |best_f|)` — spike-immune f-change check
-2. Cauchy-convergence in y-space (base Optimistix check)
-3. Step count ≥ `min_steps`
-4. Not inside the cooldown window after the last constraint release
+1. **KKT** — `‖∇f_proj‖_phys < atol + rtol × max(1, |best_f|)`.
+2. **Cauchy fallback (anti-stall)** — optimistix y-space Cauchy convergence
+   AND `‖∇f_proj‖_phys < √atol + √rtol × max(1, |best_f|)`. The relaxed
+   gradient gate avoids false convergence from line-search stalls.
+
+Both signals are suppressed during the `cooldown` window after each constraint release.
 
 ### CLI equivalents
 
 When using `kmeans-model` or `ptep-model`, the same parameters are available as flags:
 
 ```bash
-kmeans-model ... --cooldown 50 --min-steps 200 --verbose
+kmeans-model ... --cooldown 50 --verbose
 ```
 
 ## Conditioning

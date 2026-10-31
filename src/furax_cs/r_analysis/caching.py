@@ -5,7 +5,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import numpy as np
-from cadre import minimize
+from cadre import BoxConstraint, minimize
 from furax import HomothetyOperator
 from furax.obs import negative_log_likelihood, sky_signal
 from furax.obs.stokes import Stokes
@@ -74,16 +74,18 @@ def compute_w(
         max_iter=max_iter,
         atol=1e-15,
         rtol=1e-15,
-        lower_bound={
-            "beta_dust": jnp.full((max_count["beta_dust"],), 0.5),
-            "temp_dust": jnp.full((max_count["temp_dust"],), 5.0),
-            "beta_pl": jnp.full((max_count["beta_pl"],), -6.0),
-        },
-        upper_bound={
-            "beta_dust": jnp.full((max_count["beta_dust"],), 3.0),
-            "temp_dust": jnp.full((max_count["temp_dust"],), 50.0),
-            "beta_pl": jnp.full((max_count["beta_pl"],), -1.0),
-        },
+        constraints=BoxConstraint(
+            lower={
+                "beta_dust": jnp.full((max_count["beta_dust"],), 0.5),
+                "temp_dust": jnp.full((max_count["temp_dust"],), 5.0),
+                "beta_pl": jnp.full((max_count["beta_pl"],), -6.0),
+            },
+            upper={
+                "beta_dust": jnp.full((max_count["beta_dust"],), 3.0),
+                "temp_dust": jnp.full((max_count["temp_dust"],), 50.0),
+                "beta_pl": jnp.full((max_count["beta_pl"],), -1.0),
+            },
+        ),
         precondition=True,
         nu=nu,
         N=N,

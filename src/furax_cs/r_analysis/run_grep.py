@@ -46,6 +46,7 @@ def _match_folder_with_regex_tokens(
         if _is_regex_token(pat_token):
             # Regex token: find a matching folder token
             matched = _match_token_regex(folder_tokens, pat_token)
+            print(f"Matching regex token '{pat_token}' against {folder_tokens} -> {matched}")
             if matched is None:
                 return False, {}
             captures[i] = matched
