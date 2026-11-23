@@ -66,7 +66,7 @@ OUTPUT_DIR="RESULTS/GRID_SEARCH"
 jid=$(submit_job GAL020_GRID "" GRIDDING \
     distributed-gridding -n 64 -ns 100 -nr 1.0 \
     -tag c1d1s1 -m GAL020 -i LiteBIRD -cond \
-    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    -ss SEARCH_SPACE.yml -s ADABK0 -mi 1000 \
     --rtol $RTOL --atol $ATOL \
     -o $OUTPUT_DIR)
 job_ids+=($jid)
@@ -75,7 +75,7 @@ job_ids+=($jid)
 jid=$(submit_job GAL040_GRID "" GRIDDING \
     distributed-gridding -n 64 -ns 100 -nr 1.0 \
     -tag c1d1s1 -m GAL040 -i LiteBIRD -cond \
-    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    -ss SEARCH_SPACE.yml -s ADABK0 -mi 1000 \
     --rtol $RTOL --atol $ATOL \
     -o $OUTPUT_DIR)
 job_ids+=($jid)
@@ -84,7 +84,7 @@ job_ids+=($jid)
 jid=$(submit_job GAL060_GRID "" GRIDDING \
     distributed-gridding -n 64 -ns 100 -nr 1.0 \
     -tag c1d1s1 -m GAL060 -i LiteBIRD -cond \
-    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    -ss SEARCH_SPACE.yml -s ADABK0 -mi 1000 \
     --rtol $RTOL --atol $ATOL \
     -o $OUTPUT_DIR)
 job_ids+=($jid)
@@ -93,7 +93,7 @@ job_ids+=($jid)
 jid=$(submit_job GALACTIC_GRID "" GRIDDING \
     distributed-gridding -n 64 -ns 100 -nr 1.0 \
     -tag c1d1s1 -m GALACTIC -i LiteBIRD -cond \
-    -ss SEARCH_SPACE.yml -s active_set -mi 1000 \
+    -ss SEARCH_SPACE.yml -s ADABK0 -mi 1000 \
     --rtol $RTOL --atol $ATOL \
     -o $OUTPUT_DIR)
 job_ids+=($jid)
@@ -105,4 +105,4 @@ job_ids+=($jid)
 deps=$(IFS=:; echo "${job_ids[*]}")
 submit_job PTEP_SNAP "--dependency=afterok:$deps" SNAP \
     r_analysis snap -n 64 -i LiteBIRD -ird RESULTS/MULTIRES \
-    -r ptep -o $OUTPUT_DIR/multires.parquet -s active_set -mi 1000
+    -r ptep -o $OUTPUT_DIR/multires.parquet -s ADABK0 -mi 1000

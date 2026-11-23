@@ -55,7 +55,6 @@ if (
     del os.environ["NO_PROXY"]
     jax.distributed.initialize()
 # =============================================================================
-import operator
 
 import jax.numpy as jnp
 import jax.random
@@ -296,9 +295,9 @@ def main():
     d = Stokes.from_stokes(freqmaps[:, 1], freqmaps[:, 2])
     fg_stokes = Stokes.from_stokes(fg_maps[:, 1], fg_maps[:, 2])
     cmb_map_stokes = Stokes.from_stokes(cmb_map[1], cmb_map[2])
-    masked_d = get_cutout_from_mask(d, indices, axis=1)
-    masked_fg = get_cutout_from_mask(fg_stokes, indices, axis=1)
-    masked_cmb = get_cutout_from_mask(cmb_map_stokes, indices)
+    masked_d = get_cutout_from_mask(d, indices, axis=-1)
+    masked_fg = get_cutout_from_mask(fg_stokes, indices, axis=-1)
+    masked_cmb = get_cutout_from_mask(cmb_map_stokes, indices, axis=-1)
 
     # Load search space configuration from YAML
     if args.search_space is not None:
@@ -363,7 +362,7 @@ def main():
         def single_run(noise_id):
             key = jax.random.PRNGKey(noise_id)
             white_noise = f_landscapes.normal(key) * noise_ratio
-            white_noise = get_cutout_from_mask(white_noise, indices, axis=1)
+            white_noise = get_cutout_from_mask(white_noise, indices, axis=-1)
             instrument = get_instrument(args.instrument)
             sigma = get_noise_sigma_from_instrument(instrument, nside, stokes_type="QU")
             noise = white_noise * sigma
@@ -393,8 +392,7 @@ def main():
             s = sky_signal_fn(final_params, nu=nu, d=noised_d, N=N, patch_indices=guess_clusters)
             cmb = s["cmb"]
             # Variance of the CMB map
-            cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, cmb))
-            # This is equivalent to jnp.var(cmb.q) + jnp.var(cmb.u)
+            cmb_var = jnp.var(cmb.q) + jnp.var(cmb.u)
 
             cmb_np = jnp.stack([cmb.q, cmb.u])
 

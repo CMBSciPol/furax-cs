@@ -80,7 +80,7 @@ NAME="ptep1_${SKY}_BD64_TD0_BS2_LiteBIRD_GAL020"
 if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
     jid=$(submit_job PTEP_GAL020_M1 "" PTEP \
         ptep-model -n 64 -ns $NS -nr 1.0 -ud 64 0 2 \
-        -tag $SKY -m GAL020 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 2000 -s $SOLVER \
+        -tag $SKY -m GAL020 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 10000 -s $SOLVER \
         --rtol $RTOL --atol $ATOL \
         --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
         --name $NAME)
@@ -94,7 +94,7 @@ NAME="ptep1_${SKY}_BD64_TD4_BS2_LiteBIRD_GAL040"
 if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
     jid=$(submit_job PTEP_GAL040_M1 "" PTEP \
         ptep-model -n 64 -ns $NS -nr 1.0 -ud 64 4 2 \
-        -tag $SKY -m GAL040 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 2000 -s $SOLVER \
+        -tag $SKY -m GAL040 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 10000 -s $SOLVER \
         --rtol $RTOL --atol $ATOL \
         --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
         --name $NAME)
@@ -108,7 +108,7 @@ NAME="ptep1_${SKY}_BD64_TD8_BS4_LiteBIRD_GAL060"
 if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
     jid=$(submit_job PTEP_GAL060_M1 "" PTEP \
         ptep-model -n 64 -ns $NS -nr 1.0 -ud 64 8 4 \
-        -tag $SKY -m GAL060 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 2000 -s $SOLVER \
+        -tag $SKY -m GAL060 -i LiteBIRD -cond -o $OUTPUT_DIR -mi 10000 -s $SOLVER \
         --rtol $RTOL --atol $ATOL \
         --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
         --name $NAME)

@@ -17,7 +17,7 @@ dependencies = [
   "pysm3",
   "astropy",
   "optimistix",
-  "jax-cadre",
+  "jax-cadre>=0.2.0",
   "scienceplots",
   "fgbuster"
 ]
@@ -25,8 +25,8 @@ description = "GPU Powered CMB Parametric Component Seperation using Furax and J
 license = {file = "LICENSE"}
 name = "furax-cs"
 readme = "README.md"
-requires-python = ">=3.11"
-version = "0.1.1"
+requires-python = ">=3.12"
+version = "0.2.0"
 
 [project.optional-dependencies]
 all = [
@@ -54,7 +54,7 @@ plotting = [
   "scienceplots"
 ]
 scipy = [
-  "jax-cadre[scipy]"
+  "jax-cadre[scipy]>=0.2.0"
 ]
 
 [project.scripts]
@@ -114,4 +114,5 @@ packages = {find = {include = ["furax_cs*"], where = ["src"]}}
 
 [tool.uv.sources]
 fgbuster = {git = "https://github.com/fgbuster/fgbuster"}
+furax = {branch = "block-diagonal-solver", git = "https://github.com/CMBSciPol/furax.git"}
 optimistix = {git = "https://github.com/ASKabalan/optimistix.git"}

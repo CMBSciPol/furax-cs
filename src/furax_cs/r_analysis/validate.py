@@ -993,10 +993,10 @@ def run_validate(
 
                 # Extract Noise
                 noised_d = Stokes.from_stokes(
-                    Q=run_data_sliced["NOISED_D"][indx][0], U=run_data_sliced["NOISED_D"][indx][1]
+                    q=run_data_sliced["NOISED_D"][indx][0], u=run_data_sliced["NOISED_D"][indx][1]
                 )
                 small_n = Stokes.from_stokes(
-                    Q=run_data_sliced["small_n"][indx][0], U=run_data_sliced["small_n"][indx][1]
+                    q=run_data_sliced["small_n"][indx][0], u=run_data_sliced["small_n"][indx][1]
                 )
 
                 patches = {

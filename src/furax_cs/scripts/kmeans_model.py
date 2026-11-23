@@ -59,7 +59,6 @@ if (
     del os.environ["NO_PROXY"]
     jax.distributed.initialize()
 # =============================================================================
-import operator
 from time import perf_counter
 
 import jax.numpy as jnp
@@ -123,7 +122,6 @@ def load_patches_from_file(path: str, indices: Array) -> tuple[Array, int]:
     masked = full_sky[indices].astype(jnp.int64)
     n_clusters = int(jnp.unique(masked).size)
     normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
-    normalized = masked.astype(jnp.int64)
     return normalized, n_clusters
 
 
@@ -330,7 +328,7 @@ EXAMPLES:
         type=str,
         default="backtracking",
         choices=["backtracking", "zoom"],
-        help="Linesearch strategy for active_set and optax_lbfgs solvers.",
+        help="Linesearch strategy for the optax_lbfgs solver.",
     )
     parser.add_argument(
         "--name",
@@ -483,9 +481,9 @@ def main():
     d = Stokes.from_stokes(freqmaps[:, 1], freqmaps[:, 2])
     fg_stokes = Stokes.from_stokes(fg_maps[:, 1], fg_maps[:, 2])
     cmb_map_stokes = Stokes.from_stokes(cmb_map[1], cmb_map[2])
-    masked_d = get_cutout_from_mask(d, indices, axis=1)
-    masked_fg = get_cutout_from_mask(fg_stokes, indices, axis=1)
-    masked_cmb = get_cutout_from_mask(cmb_map_stokes, indices)
+    masked_d = get_cutout_from_mask(d, indices, axis=-1)
+    masked_fg = get_cutout_from_mask(fg_stokes, indices, axis=-1)
+    masked_cmb = get_cutout_from_mask(cmb_map_stokes, indices, axis=-1)
 
     max_count = {
         "beta_dust": B_dust_patches,
@@ -499,11 +497,11 @@ def main():
     }
 
     options = {
-        "linesearch": args.linesearch,
         "verbose_print": args.verbose,
         "cooldown": args.cooldown,
-        "min_steps": args.min_steps,
     }
+    if args.solver == "optax_lbfgs":  # the only solver with a selectable line search
+        options["linesearch"] = args.linesearch
 
     def compute_minimum_variance(
         T_d_patches: int,
@@ -575,7 +573,7 @@ def main():
             )
             s = sky_signal_fn(final_params, nu=nu, d=noised_d, N=N, patch_indices=guess_clusters)
             cmb = s["cmb"]
-            cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, cmb))
+            cmb_var = jnp.var(cmb.q) + jnp.var(cmb.u)
 
             cmb_np = jnp.stack([cmb.q, cmb.u])
             noise_d_np = jnp.stack([noised_d.q, noised_d.u])

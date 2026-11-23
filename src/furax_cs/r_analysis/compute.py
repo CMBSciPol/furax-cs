@@ -183,8 +183,8 @@ def _compute_single_folder(
     (indices,) = jnp.where(mask == 1)
 
     # Extract CMB data
-    cmb_true = Stokes.from_stokes(Q=best_params["I_CMB"][0], U=best_params["I_CMB"][1])
-    cmb_recon = Stokes.from_stokes(Q=run_data["CMB_O"][:, 0], U=run_data["CMB_O"][:, 1])
+    cmb_true = Stokes.from_stokes(q=best_params["I_CMB"][0], u=best_params["I_CMB"][1])
+    cmb_recon = Stokes.from_stokes(q=run_data["CMB_O"][:, 0], u=run_data["CMB_O"][:, 1])
     NLL = run_data["NLL"]
 
     # Compute W_D_FG if needed for systematic residuals
@@ -194,12 +194,12 @@ def _compute_single_folder(
         if cache_key in full_results:
             info(f"Systematics cached for index {run_index}. Loading from cache...")
             cached_w = full_results[cache_key]
-            wd = Stokes.from_stokes(Q=cached_w[0], U=cached_w[1])
+            wd = Stokes.from_stokes(q=cached_w[0], u=cached_w[1])
         else:
             hint(f"Systematics not cached for index {run_index}. Computing now and caching...")
             fg_map = Stokes.from_stokes(
-                Q=best_params["I_D_NOCMB"][:, 0],
-                U=best_params["I_D_NOCMB"][:, 1],
+                q=best_params["I_D_NOCMB"][:, 0],
+                u=best_params["I_D_NOCMB"][:, 1],
             )
             patches = {
                 "beta_dust_patches": run_data["beta_dust_patches"],

@@ -57,7 +57,7 @@ def generate_noise_operator(
         >>> instrument = get_instrument("LiteBIRD")
         >>> mask = get_mask("GAL020")
         >>> (indices,) = jnp.where(mask == 1)
-        >>> masked_d = get_cutout_from_mask(d, indices, axis=1)
+        >>> masked_d = get_cutout_from_mask(d, indices, axis=-1)
         >>> noised_d, N = generate_noise_operator(
         ...     key=jax.random.key(42),
         ...     noise_ratio=1.0,
@@ -87,7 +87,7 @@ def generate_noise_operator(
     white_noise = f_landscapes.normal(key) * noise_ratio
 
     # Extract cutout (only unmasked pixels)
-    white_noise = get_cutout_from_mask(white_noise, indices, axis=1)
+    white_noise = get_cutout_from_mask(white_noise, indices, axis=-1)
 
     # Get instrument noise sigma
     sigma = get_noise_sigma_from_instrument(instrument, nside, stokes_type=stokes_type)

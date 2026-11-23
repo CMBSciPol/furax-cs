@@ -76,7 +76,7 @@ if [ ! -f "$OUTPUT_DIR/$NAME/best_params.npz" ]; then
         kmeans-model -n 64 -ns 40 -nr 1.0 \
         -c true true true \
         -tag ${SKY} -m $MASK -i LiteBIRD \
-        -s $SOLVER -mi 2000 \
+        -s $SOLVER -mi 10000 \
         --rtol $RTOL --atol $ATOL \
         --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
         --name $NAME -o $OUTPUT_DIR)

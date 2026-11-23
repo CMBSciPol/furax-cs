@@ -114,7 +114,7 @@ for config in "${CONFIGS[@]}"; do
                     kmeans-model -n 64 -ns 40 -nr 1.0 \
                     -pc $B_DUST $T_DUST $B_SYNC \
                     -tag ${SKY} -m $MASK -i LiteBIRD \
-                    -s $SOLVER -mi 2000 \
+                    -s $SOLVER -mi 10000 \
                     --rtol $RTOL --atol $ATOL \
                     --name $NAME -o $RUN_OUTPUT_DIR)
                 current_job_ids+=("$jid")
