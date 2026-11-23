@@ -9,22 +9,18 @@ which provides the underlying implementations for **Optax**, **Optimistix**, and
 The `solver_name` argument in the `minimize` function accepts the following:
 
 ### Recommended
-*   **`ADABK0`**: **Best for noisy maps.** Active-set method with AdaBelief direction and Top-K constraint release (K=0, i.e. one constraint released per iteration). Very robust in low-SNR regions. See [How ADABK Works](#how-adabk-works) below.
+*   **`ADABK0`**: **Best for noisy maps.** AdaTopK: projected AdaBelief with a Top-K active set, releasing at most one constraint per iteration. Very robust in low-SNR regions. See [How AdaTopK Works](#how-adatopk-works) below.
 *   **`optax_lbfgs`**: **Best for noiseless runs (systematics).** L-BFGS with zoom linesearch (Strong Wolfe conditions). Very fast and accurate for smooth, noise-free landscapes.
 
 ### Other Options
 
-**Active set variants** (self-conditioned):
+**AdaTopK** (self-conditioned):
 
-*   `ADABK{N}` — AdaBelief + Top-K active set. `N * 0.1` = fraction of constraints released per step. `ADABK0` releases 1 constraint/step (most stable), `ADABK5` releases up to 50%. (see [How ADABK Works](#how-adabk-works) and paper for more info)
-*   `active_set` — Active set with Adam direction.
-*   `active_set_sgd` — Active set with SGD direction.
-*   `active_set_adabelief` — Active set with AdaBelief direction.
-*   `active_set_adaw` — Active set with AdamW direction.
+*   `ADABK{N}` — AdaTopK releasing up to $\max(1, \lfloor 0.1\,N\,n \rfloor)$ constraints per iteration, with $n$ the number of parameters. `ADABK0` releases at most one constraint per iteration (most stable). See [How AdaTopK Works](#how-adatopk-works) and the paper for more information.
 
 **Optax L-BFGS:**
 
-*   `optax_lbfgs` — L-BFGS with zoom linesearch (default) or backtracking.
+*   `optax_lbfgs` — L-BFGS with zoom linesearch (default) or backtracking (`options={"linesearch": "backtracking"}`). The legacy names `zoom` and `backtrack` are aliases of `optax_lbfgs` with that line search.
 
 **Optax first-order:**
 
@@ -47,99 +43,100 @@ The `solver_name` argument in the `minimize` function accepts the following:
 *   `scipy_tnc` — Truncated Newton (TNC).
 *   `scipy_cobyqa` — COBYQA (derivative-free constrained optimizer).
 
+For `scipy_tnc`, `atol` sets the SciPy options `ftol` and `xtol` and `rtol` sets `gtol`; for `scipy_cobyqa`, `atol` sets `final_tr_radius`. Other keys of `options` are passed to the SciPy method.
 
-## How ADABK Works
 
-ADABK (Adaptive AdaBelief with Top-K Active Set, also called **AdaTopK** in the paper) is a JAX-native optimizer that combines the TNC active-set constraint strategy with the AdaBelief adaptive gradient method.
+## How AdaTopK Works
 
-### Internal parameter space
+AdaTopK (`ADABK{N}` in the solver names; Kabalan et al. 2026, arXiv:2604.08463) is a JAX-native minimiser for box-constrained problems. It combines a TNC-style active set with the AdaBelief direction (Zhuang et al. 2020) and a projected Armijo line search (Bertsekas 1982). It is implemented as an Optimistix minimiser, `cadre.AdaTopK`, and runs inside `optimistix.minimise`.
 
-Physical parameters **x** (bounded by **l**, **u**) are mapped to a normalized [0, 1] representation via an affine transform:
+### Internal coordinates
 
-**y** = (**x** − **l**) / (**u** − **l**)
+Each parameter $x_i$ with bounds $[l_i, u_i]$ is mapped to
 
-This normalizes the optimization landscape and ensures consistent step sizes across parameters with different physical scales.
+$$
+z_i = \frac{x_i - c_i}{s_i}, \qquad c_i = \frac{l_i + u_i}{2}, \qquad s_i = u_i - l_i ,
+$$
+
+so every bounded parameter lives in $[-1/2, 1/2]$. A parameter without two finite bounds (unbounded, or bounded on one side only) uses $c_i = x_{0,i}$ and $s_i = 1 + |x_{0,i}|$, and a parameter with $l_i = u_i$ stays fixed at its bound. All steps are taken in $z$, which makes AdaTopK self-conditioned (see [Conditioning](#conditioning)).
 
 ### Active set and pivot vector
 
-Each parameter has a pivot value p_i:
+Each parameter has a pivot value $p_i$:
 
-*   p_i = −1: parameter is at the lower bound (active constraint)
-*   p_i = +1: parameter is at the upper bound (active constraint)
-*   p_i = 0: parameter is free
+*   $p_i = -1$: at the lower bound (active constraint)
+*   $p_i = +1$: at the upper bound (active constraint)
+*   $p_i = 0$: free
+*   $p_i = 2$: fixed ($l_i = u_i$)
 
-Only free parameters (p_i = 0) are optimized at each iteration.
+Only free parameters move.
 
-### Top-K constraint release
+### One iteration
 
-At each iteration, a release score is computed for every active constraint:
+1.  **Release.** For every active constraint, the score $p_i\, g_i$ is positive when the descent direction $-g_i$ points into the box ($g$ is the gradient in internal coordinates). The $k$ constraints with the largest positive scores are released: $k = 1$ for `ADABK0`, $k = \max(1, \lfloor 0.1\,N\,n \rfloor)$ for `ADABK{N}`.
+2.  **Direction.** The direction $d$ is AdaBelief on the gradient of the free parameters (heavy momentum $\beta_1 = 0.99$, short second-moment memory $\beta_2 = 0.9$, $\epsilon = 10^{-16}$). If the AdaBelief direction is not a descent direction, steepest descent of the same length is used for that step.
+3.  **Projected path.** $z(\alpha) = \mathrm{clip}(z + \alpha\, d,\; z_l,\; z_u)$, coordinate by coordinate, so a parameter close to its bound does not limit the step of the others.
+4.  **Line search.** Armijo backtracking along the projected path (sufficient-decrease constant $10^{-4}$, step halved at each trial, at most `max_linesearch_steps` trials). The first trial is twice the last accepted step, capped at 1. Each trial evaluates the value and the gradient, so the accepted trial provides the gradient of the next iteration.
+5.  **Pinning.** Parameters that land on a bound while moving outwards become active constraints.
+6.  **Restart or stop.** When the accepted step falls below `restart_alpha` or the line search fails, AdaTopK checks whether the best value improved by more than $\mathrm{ftol} \cdot \max(1, |f_\mathrm{best}|)$ since the last restart. If it did, the AdaBelief moments and the step length are reset and the iteration continues; otherwise the minimisation stops.
 
-score_i = p_i × (−g_i)
+### Termination
 
-A positive score means the negative gradient points into the feasible region — releasing this constraint could decrease the objective. The Top-K fraction K controls how many constraints are released per iteration:
+AdaTopK stops when one of the following holds:
 
-*   **K = 0** (`ADABK0`): releases 1 constraint at a time. Most stable, consistently reaches the lowest objective values.
-*   **K = N** (`ADABK{N}`): releases up to `N × 0.1` fraction of active constraints.
+1.  the KKT residual, the norm of the projected gradient in physical units, satisfies $\|P(\nabla f)\| \le \mathrm{atol} + \mathrm{rtol} \cdot \|P(\nabla f(x_0))\|$. Here $P$ keeps the gradient of free parameters, $\min(g_i, 0)$ at a lower bound, $\max(g_i, 0)$ at an upper bound, and $0$ for fixed parameters;
+2.  the restart-or-stop rule (step 6) stops it;
+3.  `max_iter` iterations are reached.
 
-### Projected gradient and AdaBelief direction
+Conditions 1 and 2 are ignored for `cooldown` iterations after a constraint release. The returned parameters are the best point found.
 
-Gradients for active constraints are zeroed out: **g_proj** = **g** ⊙ (p = 0). The projected gradient is then fed to AdaBelief, which adapts step sizes based on gradient variance. This makes it better suited to noisy gradient landscapes (low-SNR regions) than classical quasi-Newton methods (L-BFGS, TNC) which tend to reset their curvature history when gradients are unreliable.
+## AdaTopK Options
 
-### Dynamic state rescaling
-
-When the gradient norm falls outside [10⁻¹⁵, 10¹⁵], the cost function and AdaBelief moment estimates are rescaled:
-
-**m** ← f_scale · **m** ,  **v** ← f_scale² · **v**
-
-This prevents numerical under/overflow across the extreme dynamic range between the bright Galactic plane and faint high-latitude sky, without resetting the optimizer's momentum.
-
-### Bounded line search
-
-The step size α is capped at the distance to the nearest bound (α_max), then a line search finds the optimal α in [0, α_max]. If a parameter hits a bound, it becomes an active constraint.
-
-## Termination Control (ADABK solvers)
-
-Four parameters control when ADABK solvers decide to stop. Pass them via the `options` dict of `minimize()`:
+`atol`, `rtol` and `max_iter` are arguments of `minimize()`. The other options go in its `options` dict:
 
 ```python
 final_params, state = minimize(
     fn=my_loss_fn,
     init_params=params,
     solver_name="ADABK0",
+    max_iter=10000,
+    atol=1e-18,
+    rtol=1e-18,
     lower_bound=lower,
     upper_bound=upper,
     options={
-        "cooldown": 50,              # default: 20
-        "min_steps": 200,            # default: 10
-        "verbose_print": True,       # default: False
-        "max_linesearch_steps": 100, # default: 50
+        "cooldown": 50,          # default: 20
+        "verbose_print": True,   # default: False
     },
 )
 ```
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `cooldown` | `20` | Steps to suppress termination after a constraint is released. Prevents premature convergence caused by a transient function spike when a bound constraint opens. |
-| `min_steps` | `10` | Minimum iterations before termination is ever considered. Useful when the initial gradient is near zero but the landscape is not yet explored. |
-| `verbose_print` | `False` | Print per-step diagnostics: current `f`, `f_diff`, `best_f`, cooldown status, and termination decision. Uses `jax.debug.print` so it is JIT-compatible. |
-| `max_linesearch_steps` | `50` | Maximum bounded line-search steps per iteration. |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `cooldown` | `20` | Iterations after a constraint release during which termination is suppressed. |
+| `max_linesearch_steps` | `30` | Maximum Armijo backtracking trials per iteration. |
+| `ftol` | `1e-15` | Relative improvement of the best value since the last restart required to restart (step 6) instead of stopping. |
+| `restart_alpha` | `1e-10` | Accepted step length below which the step counts as collapsed (step 6). |
+| `initial_step` | `1e-2` | Stored step length at the start and after a restart; the next line search starts at twice this value. |
+| `armijo` | `1e-4` | Sufficient-decrease constant of the line search. |
+| `backtrack` | `0.5` | Step reduction factor of the line search. |
+| `b1`, `b2`, `eps` | `0.99`, `0.9`, `1e-16` | AdaBelief parameters. |
+| `max_constraints_to_release` | none | Overrides the `ADABK{N}` release count: an int is a count, a float a fraction of the parameters. |
+| `verbose_print` | `False` | Print per-iteration diagnostics (objective, KKT residual, step length, line-search trials, number of free parameters, release, restart, stop) with `jax.debug.print`, so it is JIT-compatible. |
 
-### How termination is decided
+With `record_history=True`, `minimize()` also returns the per-iteration step norm (internal coordinates) and objective in `state.history`. The AdaTopK state (`state.solver_state`) holds the KKT residual (`kkt`), the pivot vector (`pivot`) and counters (`n_evals`, `n_restart`, `n_ls_fail`, `n_safeguard`).
 
-Termination requires **all** of the following to hold simultaneously:
-
-1. `f_diff = |f_current − f_prev| < atol + rtol × max(1, |best_f|)` — spike-immune f-change check
-2. Cauchy-convergence in y-space (base Optimistix check)
-3. Step count ≥ `min_steps`
-4. Not inside the cooldown window after the last constraint release
+Any other key in `options` raises a `TypeError` for `ADABK*`: AdaTopK accepts only its own fields (and `cooldown`), so options of other solvers, such as `linesearch` or `learning_rate`, must not be passed to it.
 
 ### CLI equivalents
 
-When using `kmeans-model` or `ptep-model`, the same parameters are available as flags:
+`kmeans-model` and `ptep-model` expose the cooldown and the diagnostics as flags:
 
 ```bash
-kmeans-model ... --cooldown 50 --min-steps 200 --verbose
+kmeans-model ... -s ADABK0 --cooldown 50 --verbose
 ```
+
+The `--min-steps` flag is still accepted but has no effect on the solver (it only appears in the run name).
 
 ## Conditioning
 
@@ -152,12 +149,12 @@ Conditioning (preconditioning) transforms the optimization problem to improve co
 
 These solvers handle conditioning internally and ignore the `precondition` flag:
 
-*   **Active set variants** (`active_set`, `active_set_sgd`, `active_set_adabelief`, `active_set_adaw`, `ADABK{N}`) — use internal affine transform + dynamic state rescaling.
+*   **AdaTopK** (`ADABK{N}`) — works in its own internal coordinates (see [Internal coordinates](#internal-coordinates)); `precondition=True` is ignored with a warning.
 *   **SciPy solvers** (`scipy_tnc`, `scipy_cobyqa`) — SciPy handles bounds and scaling internally.
 
 ### Externally conditioned solvers
 
-All other solvers (`optax_lbfgs`, `adam`, `optimistix_*`, etc.) benefit from external conditioning when dealing with poorly scaled problems. Pass `precondition=True` (or a custom scaling function) to `minimize`.
+All other solvers (`optax_lbfgs`, `adam`, `optimistix_*`, etc.) benefit from external conditioning when dealing with poorly scaled problems. Pass `precondition=True` to `minimize`.
 
 ## Minimizing Programmatically
 
@@ -173,6 +170,22 @@ final_params, state = minimize(
     upper_bound=upper,
     **kwargs
 )
+```
+
+### Using AdaTopK directly with Optimistix
+
+`cadre.AdaTopK` is an `optimistix` minimiser, so it can be passed to `optimistix.minimise` without `minimize()`. The objective then takes `(params, args)`:
+
+```python
+import optimistix as optx
+from cadre import AdaTopK
+
+solver = AdaTopK(rtol=0.0, atol=1e-10, lower=lower, upper=upper, cooldown=50)
+sol = optx.minimise(my_loss_fn, solver, params, args, max_steps=10_000, throw=False)
+
+sol.value                # best parameters found
+sol.stats["num_steps"]   # iterations
+sol.state.best_loss, sol.state.kkt, sol.state.n_restart
 ```
 
 ### Advanced: Stepping Interactively with Solvers
@@ -201,7 +214,7 @@ f_struct = jax.ShapeDtypeStruct((), jnp.float32)
 print(f"{'Loss':<12} | {'Step':<5} | {'Status':<10} | {'Final Params':<30}")
 print("-" * 55)
 
-# active_set or optax_lbfgs for example
+# optax_lbfgs here; get_solver("ADABK0") returns an AdaTopK minimiser, whose loss is state.f
 solver, _ = get_solver("optax_lbfgs", rtol=1e-6, atol=1e-6)
 
 state = solver.init(simple_loss, init_params, target ,{}  , f_struct , None , frozenset())
