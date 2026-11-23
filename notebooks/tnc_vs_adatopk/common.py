@@ -37,8 +37,6 @@ from furax.linalg import BlockDiagonalSolver  # noqa: E402
 from furax.obs import negative_log_likelihood, sky_signal  # noqa: E402
 from furax.obs._likelihoods import _spectral_likelihood_core  # noqa: E402
 from furax.obs.stokes import Stokes  # noqa: E402
-from jax_healpy.clustering import normalize_by_first_occurrence  # noqa: E402
-
 from furax_cs import (  # noqa: E402
     bin_parameter_map,
     generate_noise_operator,
@@ -58,6 +56,7 @@ from furax_cs.r_analysis.residuals import (  # noqa: E402
     compute_systematic_res,
     compute_total_res,
 )
+from jax_healpy.clustering import normalize_by_first_occurrence  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Problem definition, identical for both optimisers

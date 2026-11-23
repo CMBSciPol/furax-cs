@@ -71,7 +71,8 @@ def _extract_variance_vs_clusters_points(
 
         cmb_recon = cmb_pytree["cmb_recon"]
         variance = sum(
-            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1) for x in (cmb_recon.q, cmb_recon.u)
+            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1)
+            for x in (cmb_recon.q, cmb_recon.u)
         )
         min_variance = float(jnp.min(variance))
 
@@ -127,7 +128,8 @@ def _extract_variance_vs_r_points(
 
         cmb_recon = cmb_pytree["cmb_recon"]
         variance = sum(
-            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1) for x in (cmb_recon.q, cmb_recon.u)
+            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1)
+            for x in (cmb_recon.q, cmb_recon.u)
         )
         min_variance = float(jnp.min(variance))
 
@@ -186,7 +188,8 @@ def _create_variance_vs_r_plot(
 
         cmb_recon = cmb_pytree["cmb_recon"]
         variance = sum(
-            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1) for x in (cmb_recon.q, cmb_recon.u)
+            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1)
+            for x in (cmb_recon.q, cmb_recon.u)
         )
         min_variance = float(jnp.min(variance))
 
