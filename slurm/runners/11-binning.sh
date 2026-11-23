@@ -105,7 +105,7 @@ for BIN in 10 100 1000; do
                "$BIN_DIR/patches_temp_dust.npy" \
                "$BIN_DIR/patches_beta_pl.npy" \
             -tag $SKY -m ALL-GALACTIC -i LiteBIRD \
-            -s $SOLVER -mi 2000 \
+            -s $SOLVER -mi 10000 \
             --rtol $RTOL --atol $ATOL \
             --cooldown $COOLDOWN --min-steps $MIN_STEPS $verbose_arg \
             --name $NAME -o "$OUTPUT_DIR/KMEANS")

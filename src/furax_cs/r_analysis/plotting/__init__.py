@@ -8,7 +8,6 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 import healpy as hp
-import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -295,12 +294,11 @@ def save_or_show(
 
 def get_min_variance(cmb_map: Stokes) -> Stokes:
     """Select the realization with minimum variance across Q/U components."""
-    seen_mask = jax.tree.map(lambda x: jnp.all(x != hp.UNSEEN, axis=0), cmb_map)
-    cmb_map_seen = jax.tree.map(lambda x, m: x[:, m], cmb_map, seen_mask)
-    variance = jax.tree.map(lambda x: jnp.var(x, axis=1), cmb_map_seen)
-    variance = sum(jax.tree.leaves(variance))
+    variance = sum(
+        jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1) for x in (cmb_map.q, cmb_map.u)
+    )
     argmin = jnp.argmin(variance)
-    return jax.tree.map(lambda x: x[argmin], cmb_map)
+    return cmb_map[argmin]
 
 
 def get_masked_residual(true_map, model_map):

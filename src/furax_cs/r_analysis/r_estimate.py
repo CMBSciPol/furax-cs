@@ -203,9 +203,9 @@ def estimate_r_from_maps(
     """
 
     def _to_numpy(stokes: Stokes) -> Float[Array, ...]:
-        """Convert Stokes object to expanded IQU numpy array."""
+        """Convert Stokes object to an IQU numpy array of shape (..., 3, npix)."""
         expanded = expand_stokes(stokes)
-        return np.vstack([expanded.i, expanded.q, expanded.u])
+        return np.stack([expanded.i, expanded.q, expanded.u], axis=-2)
 
     # 1. Expand Stokes format
     cmb_expanded = _to_numpy(cmb)
@@ -241,6 +241,8 @@ def estimate_r_from_maps(
 
     # 7. Expand auxiliary maps (if provided)
     cmb_hat_expanded = _to_numpy(cmb_hat) if cmb_hat is not None else None
+    if cmb_hat_expanded is not None and cmb_hat_expanded.ndim == 2:
+        cmb_hat_expanded = cmb_hat_expanded[np.newaxis]  # single realisation -> (1, 3, npix)
     syst_map_expanded = _to_numpy(syst_map) if syst_map is not None else None
 
     # 8. Compute noise spectrum

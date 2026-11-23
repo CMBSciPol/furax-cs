@@ -3,7 +3,6 @@ import os
 os.environ["EQX_ON_ERROR"] = "nan"
 
 import argparse
-import operator
 from functools import partial
 from time import perf_counter
 
@@ -234,9 +233,9 @@ def main():
     d = Stokes.from_stokes(freqmaps[:, 1], freqmaps[:, 2])
     fg_stokes = Stokes.from_stokes(fg_maps[:, 1], fg_maps[:, 2])
     cmb_map_stokes = Stokes.from_stokes(cmb_map[1], cmb_map[2])
-    masked_d = get_cutout_from_mask(d, indices, axis=1)
-    masked_fg = get_cutout_from_mask(fg_stokes, indices, axis=1)
-    masked_cmb = get_cutout_from_mask(cmb_map_stokes, indices)
+    masked_d = get_cutout_from_mask(d, indices, axis=-1)
+    masked_fg = get_cutout_from_mask(fg_stokes, indices, axis=-1)
+    masked_cmb = get_cutout_from_mask(cmb_map_stokes, indices, axis=-1)
 
     # Use multi-resolution clustering with ud_grade
     target_ud_grade = {
@@ -284,7 +283,6 @@ def main():
     options = {
         "verbose_print": args.verbose,
         "cooldown": args.cooldown,
-        "min_steps": args.min_steps,
     }
 
     def single_run(noise_id):
@@ -312,7 +310,7 @@ def main():
 
         s = sky_signal_fn(final_params, nu=nu, d=noised_d, N=N, patch_indices=patch_indices)
         cmb = s["cmb"]
-        cmb_var = jax.tree.reduce(operator.add, jax.tree.map(jnp.var, cmb))
+        cmb_var = jnp.var(cmb.q) + jnp.var(cmb.u)
 
         cmb_np = jnp.stack([cmb.q, cmb.u])
         noise_d_np = jnp.stack([noised_d.q, noised_d.u])

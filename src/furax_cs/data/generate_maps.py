@@ -397,7 +397,7 @@ def load_from_cache(
     # Check if file exists and load if it does; otherwise raise an error with guidance
     if os.path.exists(cache_file):
         with open(cache_file, "rb") as f:
-            freq_maps = pickle.load(f)
+            freq_maps = np.asarray(pickle.load(f), dtype=np.float64)
         info(f"Loaded freq_maps for nside {nside} from cache.")
     else:
         raise FileNotFoundError(
@@ -474,7 +474,7 @@ def load_fg_map(
                 f"Run: generate_data --sky {sky} --nside {nside}"
             )
         with open(fg_cache, "rb") as f:
-            return np.array(instrument.frequency), pickle.load(f)
+            return np.array(instrument.frequency), np.asarray(pickle.load(f), dtype=np.float64)
     _, stripped_sky = parse_sky_tag(sky)
     return load_from_cache(
         nside, noise_ratio=noise_ratio, instrument_name=instrument_name, sky=stripped_sky
@@ -558,7 +558,7 @@ def load_cmb_map(nside: int, sky: str = "c1d0s0") -> Float[Array, "3 npix"]:
                 f"Run: generate_data --sky {sky} --nside {nside}"
             )
         with open(cmb_cache, "rb") as f:
-            return pickle.load(f)
+            return np.asarray(pickle.load(f), dtype=np.float64)
 
     cmb_tag, _ = parse_sky_tag(sky)
 
@@ -569,7 +569,7 @@ def load_cmb_map(nside: int, sky: str = "c1d0s0") -> Float[Array, "3 npix"]:
         cache_file = os.path.join(cache_dir, f"freq_maps_nside_{nside}_{cmb_tag}.pkl")
         if os.path.exists(cache_file):
             with open(cache_file, "rb") as f:
-                freq_maps = pickle.load(f)
+                freq_maps = np.asarray(pickle.load(f), dtype=np.float64)
             info(f"Loaded freq_maps for nside {nside} from cache.")
         else:
             raise FileNotFoundError(

@@ -71,7 +71,7 @@ def run_fg_buster(
         f"Running FGBuster {fgbuster_solver} Comp sep nside={nside} cluster_count={cluster_count}..."
     )
 
-    d_clean = Stokes.from_stokes(Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
+    d_clean = Stokes.from_stokes(q=freq_maps[:, 1, :], u=freq_maps[:, 2, :])
 
     mask = jnp.ones_like(d_clean.q[0]).astype(jnp.int64)
 
@@ -200,7 +200,7 @@ def run_jax_minimize(
         best_params,
     )
 
-    d_clean = Stokes.from_stokes(Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
+    d_clean = Stokes.from_stokes(q=freq_maps[:, 1, :], u=freq_maps[:, 2, :])
     mask = jnp.ones_like(d_clean.q[0]).astype(jnp.int64)
 
     (indices,) = jnp.where(mask == 1)

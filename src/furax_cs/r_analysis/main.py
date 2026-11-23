@@ -1,4 +1,5 @@
 import datasets
+import jax
 import matplotlib.pyplot as plt
 import scienceplots  # noqa: F401
 from furax_cs.data.instruments import get_instrument
@@ -17,6 +18,8 @@ from .r_estimate import run_estimate
 from .run_grep import run_grep
 from .snapshot import run_snapshot
 from .validate import run_validate
+
+jax.config.update("jax_enable_x64", True)
 
 out_folder = "plots/"
 

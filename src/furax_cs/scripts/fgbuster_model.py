@@ -121,7 +121,6 @@ def load_patches_from_file(path: str, indices: Array) -> tuple[Array, int]:
     masked = full_sky[indices].astype(jnp.int64)
     n_clusters = int(jnp.unique(masked).size)
     normalized = normalize_by_first_occurrence(masked, n_clusters, n_clusters).astype(jnp.int64)
-    normalized = masked.astype(jnp.int64)
     return normalized, n_clusters
 
 
@@ -447,7 +446,7 @@ def main():
     masked_fg = jax.tree.map(np.asarray, masked_fg)
     masked_cmb = jax.tree.map(np.asarray, masked_cmb)
 
-    d_cutout = get_cutout_from_mask(d, indices, axis=1)
+    d_cutout = get_cutout_from_mask(d, indices, axis=-1)
 
     # Step 5: Perform clustering for patch indices (mode-dependent)
     if use_kmeans:
@@ -579,7 +578,7 @@ def main():
             key, args.noise_ratio, indices, nside, d_cutout, furax_instrument
         )
         # Expand to full map for FGBuster (with UNSEEN in masked pixels)
-        noised_d_full = get_fullmap_from_cutout(noised_d_cutout, indices, nside, axis=1)
+        noised_d_full = get_fullmap_from_cutout(noised_d_cutout, indices, nside, axis=-1)
         noised_d_masked = jax.tree.map(
             lambda x: x.at[..., unseen_indices].set(hp.UNSEEN), noised_d_full
         )
@@ -616,7 +615,7 @@ def main():
 
         # Convert to Stokes and extract cutout (only unmasked pixels)
         cmb_result_stokes = Stokes.from_stokes(cmb_q_full, cmb_u_full)
-        cmb_cutout = get_cutout_from_mask(cmb_result_stokes, indices)
+        cmb_cutout = get_cutout_from_mask(cmb_result_stokes, indices, axis=-1)
         cmb_q, cmb_u = cmb_cutout.q, cmb_cutout.u
 
         # Compute variance on cutout (not full map)
@@ -659,9 +658,9 @@ def main():
 
     # Save best parameters and auxiliary data
     # Convert masked maps (full HEALPix with UNSEEN) to cutouts for r_analysis
-    masked_cmb_cutout = get_cutout_from_mask(masked_cmb, indices)
-    masked_fg_cutout = get_cutout_from_mask(masked_fg, indices, axis=1)
-    masked_d_cutout = get_cutout_from_mask(masked_d, indices, axis=1)
+    masked_cmb_cutout = get_cutout_from_mask(masked_cmb, indices, axis=-1)
+    masked_fg_cutout = get_cutout_from_mask(masked_fg, indices, axis=-1)
+    masked_d_cutout = get_cutout_from_mask(masked_d, indices, axis=-1)
 
     best_params = {}
     best_params["I_CMB"] = np.stack(

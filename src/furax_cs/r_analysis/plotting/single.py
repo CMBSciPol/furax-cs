@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import healpy as hp
-import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -70,10 +69,11 @@ def _extract_variance_vs_clusters_points(
             patch_data = patches[patch_key]
             n_clusters = np.unique(patch_data[patch_data != hp.UNSEEN]).size
 
-        seen_mask = jax.tree.map(lambda x: jnp.all(x != hp.UNSEEN, axis=0), cmb_pytree["cmb_recon"])
-        cmb_map_seen = jax.tree.map(lambda x, m: x[:, m], cmb_pytree["cmb_recon"], seen_mask)
-        variance = jax.tree.map(lambda x: jnp.var(x, axis=1), cmb_map_seen)
-        min_variance = float(jnp.min(sum(jax.tree.leaves(variance))))
+        cmb_recon = cmb_pytree["cmb_recon"]
+        variance = sum(
+            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1) for x in (cmb_recon.q, cmb_recon.u)
+        )
+        min_variance = float(jnp.min(variance))
 
         if n_clusters not in method_dict or min_variance < method_dict[n_clusters]:
             method_dict[n_clusters] = min_variance
@@ -125,10 +125,11 @@ def _extract_variance_vs_r_points(
         if cmb_pytree is None or r_data is None or r_data.get("r_best") is None:
             continue
 
-        seen_mask = jax.tree.map(lambda x: jnp.all(x != hp.UNSEEN, axis=0), cmb_pytree["cmb_recon"])
-        cmb_map_seen = jax.tree.map(lambda x, m: x[:, m], cmb_pytree["cmb_recon"], seen_mask)
-        variance = jax.tree.map(lambda x: jnp.var(x, axis=1), cmb_map_seen)
-        min_variance = float(jnp.min(sum(jax.tree.leaves(variance))))
+        cmb_recon = cmb_pytree["cmb_recon"]
+        variance = sum(
+            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1) for x in (cmb_recon.q, cmb_recon.u)
+        )
+        min_variance = float(jnp.min(variance))
 
         points.append(
             (
@@ -183,11 +184,11 @@ def _create_variance_vs_r_plot(
             patch_data = patches[patch_key]
             n_clusters = np.unique(patch_data[patch_data != hp.UNSEEN]).size
 
-        seen_mask = jax.tree.map(lambda x: jnp.all(x != hp.UNSEEN, axis=0), cmb_pytree["cmb_recon"])
-        cmb_map_seen = jax.tree.map(lambda x, m: x[:, m], cmb_pytree["cmb_recon"], seen_mask)
-        variance = jax.tree.map(lambda x: jnp.var(x, axis=1), cmb_map_seen)
-        variance_sum = sum(jax.tree.leaves(variance))
-        min_variance = float(jnp.min(variance_sum))
+        cmb_recon = cmb_pytree["cmb_recon"]
+        variance = sum(
+            jnp.var(x[:, jnp.all(x != hp.UNSEEN, axis=0)], axis=1) for x in (cmb_recon.q, cmb_recon.u)
+        )
+        min_variance = float(jnp.min(variance))
 
         points.append(
             (

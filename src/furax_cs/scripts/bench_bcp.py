@@ -164,7 +164,7 @@ def run_jax_negative_log_prob(
     info(f"Running Furax Log Likelihood nside={nside} ...")
 
     # Step 1: Convert frequency maps to Stokes data structure
-    d = Stokes.from_stokes(I=freq_maps[:, 0, :], Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
+    d = Stokes.from_stokes(i=freq_maps[:, 0, :], q=freq_maps[:, 1, :], u=freq_maps[:, 2, :])
 
     # Step 2: Create identity noise operator (simplified for benchmarking)
     invN = HomothetyOperator(jnp.ones(1), in_structure=d.structure)
@@ -202,7 +202,7 @@ def run_jax_minimize(
 
     info(f"Running Furax {solver_name} Comp sep nside={nside} ...")
 
-    d = Stokes.from_stokes(I=freq_maps[:, 0, :], Q=freq_maps[:, 1, :], U=freq_maps[:, 2, :])
+    d = Stokes.from_stokes(i=freq_maps[:, 0, :], q=freq_maps[:, 1, :], u=freq_maps[:, 2, :])
     invN = HomothetyOperator(jnp.ones(1), in_structure=d.structure)
 
     nll = partial(
